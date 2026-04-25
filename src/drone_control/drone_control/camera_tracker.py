@@ -36,6 +36,8 @@ class CameraTracker(Node):
         self.marker_detected = False
         self.latest_pose = None
         self.last_detection_time = None
+
+        
         # -------------------------
         # Publisher
         # -------------------------
