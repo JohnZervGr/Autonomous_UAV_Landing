@@ -2,7 +2,8 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'drone_vision'
+
+package_name = 'drone_control'
 
 setup(
     name=package_name,
@@ -27,9 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'camera_viewer = drone_vision.camera_vision:main',
-            'image_test = drone_vision.aruco_image_test:main',
-            'detector = drone_vision.detector:main',
+            'drone_control_node = drone_control.controller:main',
         ],
     },
 )

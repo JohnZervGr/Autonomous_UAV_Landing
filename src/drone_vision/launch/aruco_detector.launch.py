@@ -11,17 +11,6 @@ def generate_launch_description():
         description='ROS image topic to subscribe to'
     )
 
-    camera_viewer_node = Node(
-        package='drone_vision',
-        executable='camera_viewer',
-        name='camera_viewer',
-        output='screen',
-        parameters=[{
-            'image_topic': LaunchConfiguration('image_topic')
-        }]
-    )
-
-
     image_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
@@ -54,9 +43,28 @@ def generate_launch_description():
         ]
     )
 
+    aruco_detector_node = Node(
+        package='aruco_ros',
+        executable='single',
+        name='aruco_single',
+        output='screen',
+        parameters=[{
+            'marker_id': 0,
+            'marker_size': 1.20,
+            'reference_frame': 'camera_link',
+            'dictionary': 'DICT_4X4_50',
+            'camera_frame': 'camera_link',
+            'marker_frame': 'aruco_marker',
+        }],
+        remappings=[
+            ('/image', '/gz_camera/image_raw'),
+            ('/camera_info', '/gz_camera/camera_info'),
+        ]
+    )
+
     return LaunchDescription([
         image_topic_arg,
         image_bridge,
         camera_info_bridge,
-        camera_viewer_node
+        aruco_detector_node
     ])
