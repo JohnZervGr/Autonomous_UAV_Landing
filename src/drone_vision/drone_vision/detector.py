@@ -45,8 +45,7 @@ class ArucoDetector(Node):
         # -------------------------
         self.bridge = CvBridge()
 
-        # For now we hardcode DICT_4X4_50 because this is known to work
-        self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
+        self.aruco_dict = cv2.aruco.Dictionary_get(getattr(cv2.aruco, self.dictionary_name))
         self.aruco_params = cv2.aruco.DetectorParameters_create()
 
         # -------------------------
@@ -154,7 +153,7 @@ class ArucoDetector(Node):
     def image_callback(self, msg: Image):
         """Main image callback: convert image, detect marker, publish result."""
 
-        
+        self.get_logger().info('Received image.')
 
         frame = self.ros_image_to_cv2(msg)
         # marker detection
@@ -168,17 +167,18 @@ class ArucoDetector(Node):
         self.detected_pub.publish(detected_msg)
 
         if detected:
-            self.get_logger().debug(f'Target marker detected: {self.marker_id}')
+            self.get_logger().info(f'Target marker detected: {self.marker_id}')
         else:
-            self.get_logger().debug('Target marker not detected.')
+            self.get_logger().info('Target marker not detected.')
 
     
         #pose estimetion        
         if detected and ids is not None:
             self.last_image_stamp = msg.header.stamp
             pose_msg = self.estimate_target_pose(corners, ids)
-
+            self.get_logger().info(f'Estimated target pose: {pose_msg}')
             if pose_msg is not None:
+                self.get_logger().info(f'Publishing target pose')
                 self.pose_pub.publish(pose_msg)
                 self.publish_tf(pose_msg)
 

@@ -5,8 +5,10 @@ from rclpy.node import Node
 from enum import Enum
 
 from mavros_msgs.msg import State, ExtendedState
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Vector3Stamped
 from mavros_msgs.srv import SetMode, CommandBool
+from std_msgs.msg import Bool
+
 
 
 class FlightState(Enum):
@@ -71,6 +73,20 @@ class Controller(Node):
             10
         )
 
+        self.marker_visible = self.create_subscription(
+            Bool,
+            '/controller/target_visible',
+            self.marker_visible_cb,
+            10
+        )
+
+        self.error_pub = self.create_publisher(
+            Vector3Stamped,
+            '/controller/position_error',
+            self.error_cb,
+            10
+        )
+
         ####################### PUBLISHERS ###############################
         self.setpoint_pub = self.create_publisher(
             PoseStamped,
@@ -79,9 +95,14 @@ class Controller(Node):
         )
 
         self.control_timer = self.create_timer(0.1, self.control_loop)  # 10 Hz
+        self.get_logger().info("Controller node initialized, waiting for FCU connection...")
 
     def on_takeoff_complete(self):
         self.get_logger().info("Takeoff complete, transitioning to MISSION")
+
+    def error_cb(self, msg: Vector3Stamped):
+        # This callback can be used to log or process the position error if needed
+        pass
 
     def state_callback(self, msg: State):
         self.current_mode = msg.mode
@@ -93,6 +114,9 @@ class Controller(Node):
 
     def local_pose_cb(self, msg: PoseStamped):
         self.local_pose = msg
+
+    def marker_visible_cb(self, msg: Bool):
+        self.marker_visible = msg
 
     def trigger(self, event: str):
         key = (self.state, event)

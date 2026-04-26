@@ -57,13 +57,13 @@ def generate_launch_description():
         name='gz_camera_image_bridge',
         output='screen',
         arguments=[
-            '/world/default/model/x500_mono_cam_0/link/camera_link/sensor/camera/image'
+            '/world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/image'
             '@sensor_msgs/msg/Image'
             '@gz.msgs.Image'
         ],
         remappings=[
             (
-                '/world/default/model/x500_mono_cam_0/link/camera_link/sensor/camera/image',
+                '/world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/image',
                 '/gz_camera/image_raw'
             )
         ]
@@ -78,13 +78,13 @@ def generate_launch_description():
         name='gz_camera_info_bridge',
         output='screen',
         arguments=[
-            '/world/default/model/x500_mono_cam_0/link/camera_link/sensor/camera/camera_info'
+            '/world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/camera_info'
             '@sensor_msgs/msg/CameraInfo'
             '@gz.msgs.CameraInfo'
         ],
         remappings=[
             (
-                '/world/default/model/x500_mono_cam_0/link/camera_link/sensor/camera/camera_info',
+                '/world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/camera_info',
                 '/gz_camera/camera_info'
             )
         ]

@@ -18,9 +18,9 @@ class CameraTracker(Node):
         self.declare_parameter('error_topic', '/controller/tracking_error')
         self.declare_parameter('target_timeout', 0.5)
 
-        self.declare_parameter('x', 0.0)
-        self.declare_parameter('y', 0.0)
-        self.declare_parameter('z', 2.0)
+        self.declare_parameter('desired_x', 0.0)
+        self.declare_parameter('desired_y', 0.0)
+        self.declare_parameter('desired_z', 2.0)
 
         self.target_pose_topic = self.get_parameter('pose_topic').value
         self.detected_topic = self.get_parameter('detected_topic').value
@@ -73,6 +73,7 @@ class CameraTracker(Node):
         self.timer = self.create_timer(0.05, self.timer_callback)  # 20 Hz
     
     def detected_callback(self, msg: Bool):
+        self.get_logger().debug(f"Marker detected: {msg.data}")
         self.marker_detected = msg.data
 
         if msg.data:
@@ -89,10 +90,9 @@ class CameraTracker(Node):
         visible_msg = Bool()
         visible_msg.data = visible
         self.visibility_pub.publish(visible_msg)
-
-        if not visible or self.latest_pose is None:
+        self.get_logger().info(f"Target visible: {visible} self.latest_pose: {self.latest_pose}")
+        if not visible:
             return
-
         error_msg = Vector3Stamped()
         error_msg.header = self.latest_pose.header
 
@@ -102,18 +102,18 @@ class CameraTracker(Node):
 
         self.error_pub.publish(error_msg)
 
+    #temp fix will sort out later, should be based on timeouts and not just detection flag
     def is_target_visible(self):
-        if not self.marker_detected:
-            return False
-
+        if self.marker_detected:
+            return True
+        '''
         if self.last_detection_time is None:
             return False
 
         if self.latest_pose is None:
-            return False
+            return False'''
 
-        elapsed = self.get_clock().now() - self.last_detection_time
-        return elapsed.nanoseconds * 1e-9 < self.target_timeout
+        return False
     
 def main():
     rclpy.init()

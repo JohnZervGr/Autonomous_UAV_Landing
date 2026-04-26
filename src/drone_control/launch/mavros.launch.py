@@ -8,11 +8,10 @@ import os
 
 
 def generate_launch_description():
-    # Launch args
     fcu_url_arg = DeclareLaunchArgument(
         'fcu_url',
         default_value='udp://:14540@127.0.0.1:14557',
-        description='MAVROS FCU URL for PX4 SITL'
+        description='PX4 SITL FCU URL'
     )
 
     gcs_url_arg = DeclareLaunchArgument(
@@ -45,6 +44,7 @@ def generate_launch_description():
         'launch',
         'px4.launch'
     )
+    
 
     mavros_node = IncludeLaunchDescription(
         AnyLaunchDescriptionSource(mavros_launch),
@@ -57,22 +57,6 @@ def generate_launch_description():
         }.items()
     )
 
-    # drone control node
-    control_node = Node(
-        package='drone_control',
-        executable='drone_control_node',   # change to your real executable name
-        name='mission_control_node',
-        output='screen',
-    )
-
-    #marker detection node 
-    marker_detection_node = Node(
-        package='drone_control',
-        executable='camera_tracker_node',   # change to your real executable name
-        name='marker_detection_node',
-        output='screen',
-    )
-
     return LaunchDescription([
         fcu_url_arg,
         gcs_url_arg,
@@ -80,5 +64,4 @@ def generate_launch_description():
         tgt_component_arg,
         namespace_arg,
         mavros_node,
-        marker_detection_node,
     ])
