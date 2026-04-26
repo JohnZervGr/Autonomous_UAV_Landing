@@ -35,6 +35,12 @@ class FSMController(Node):
         self.marker_visible = False
         self.tracking_error = Vector3Stamped()
 
+        self.prev_ex = 0.0
+        self.prev_ey = 0.0
+        self.prev_ez = 0.0
+
+        self.prev_error_time = self.get_clock().now()
+
         # Subscribers
         self.create_subscription(State, '/mavros/state', self.state_cb, 10)
         self.create_subscription(
@@ -69,7 +75,7 @@ class FSMController(Node):
         self.timer = self.create_timer(0.1, self.run_fsm)
     
     def tracking_error_cb(self, msg):
-        self.get_logger().info(f"Tracking error: x={msg.vector.x:.2f}, y={msg.vector.y:.2f}, z={msg.vector.z:.2f}")
+        self.get_logger().debug(f"Tracking error: x={msg.vector.x:.2f}, y={msg.vector.y:.2f}, z={msg.vector.z:.2f}")
         self.tracking_error = msg
         return
     
@@ -106,7 +112,7 @@ class FSMController(Node):
         elif self.state == FlightState.TAKEOFF:
             self.publish_setpoint(self.target_altitude)
         elif self.state == FlightState.MISSION:
-            self.get_logger().info(f"Marker visible: {self.marker_visible}")
+            self.get_logger().debug(f"Marker visible: {self.marker_visible}")
             if self.marker_visible:
                 self.publish_velocity(*self.compute_velocity())
             else:
@@ -159,22 +165,55 @@ class FSMController(Node):
             if not self.marker_visible:
                 self.get_logger().info("Marker lost → TAKEOFF")
                 self.state = FlightState.TAKEOFF
+                self.reset_controller()
+
+        # when marker is lost, reset the controller memory
+    def reset_controller(self):
+        self.prev_ex = 0.0
+        self.prev_ey = 0.0
+        self.prev_ez = 0.0
+        self.prev_error_time = self.get_clock().now()
 
     def compute_velocity(self):
-        kx = 0.3
-        ky = 0.3
-        kz = 0.2
+        kp_x = 0.05
+        kp_y = 0.05
+        kp_z = 0.5
 
-        max_xy = 0.5
-        max_z = 0.3
+        kd_x = 0.01
+        kd_y = 0.01
+        kd_z = 0.012
+
+        max_x = 3.0
+        max_y = 3.0
+        max_z = 1.2
+
+        now = self.get_clock().now()
+        dt = (now - self.prev_error_time).nanoseconds / 1e9
+
+        if dt <= 0.0:
+            dt = 0.1
 
         ex = self.tracking_error.vector.x
         ey = self.tracking_error.vector.y
         ez = self.tracking_error.vector.z
 
-        vx = self.clamp(kx * ex, max_xy)
-        vy = self.clamp(ky * ey, max_xy)
-        vz = self.clamp(kz * ez, max_z)
+        dex = (ex - self.prev_ex) / dt
+        dey = (ey - self.prev_ey) / dt
+        dez = (ez - self.prev_ez) / dt
+
+        self.prev_ex = ex
+        self.prev_ey = ey
+        self.prev_ez = ez
+        self.prev_error_time = now
+
+        vy = -(kp_x * ex + kd_x * dex)
+        vx = -(kp_y * ey + kd_y * dey)
+        vz = -(kp_z * ez + kd_z * dez)
+
+        vx = self.clamp(vx, max_x)
+        vy = self.clamp(vy, max_y)
+        vz = self.clamp(vz, max_z)
+
 
         return vx, vy, vz
     

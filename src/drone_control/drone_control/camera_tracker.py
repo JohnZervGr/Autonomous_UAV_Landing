@@ -20,7 +20,7 @@ class CameraTracker(Node):
 
         self.declare_parameter('desired_x', 0.0)
         self.declare_parameter('desired_y', 0.0)
-        self.declare_parameter('desired_z', 2.0)
+        self.declare_parameter('desired_z', 5.0)
 
         self.target_pose_topic = self.get_parameter('pose_topic').value
         self.detected_topic = self.get_parameter('detected_topic').value
