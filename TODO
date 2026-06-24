@@ -1,4 +1,5 @@
-#1  work on the flight fsm so it is presentable
+#1  work on the flight fsm so it is presentable ~
+#1.2 make the x/y axis flip on the tracker node instead of the fsm 
 #2 impruve pid gains
 #3 implement filtering for the vision system as needed
 #4 add miss tolerance to the fsm

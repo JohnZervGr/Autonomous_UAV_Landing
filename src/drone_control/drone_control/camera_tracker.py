@@ -90,7 +90,7 @@ class CameraTracker(Node):
         visible_msg = Bool()
         visible_msg.data = visible
         self.visibility_pub.publish(visible_msg)
-        self.get_logger().info(f"Target visible: {visible} self.latest_pose: {self.latest_pose}")
+        self.get_logger().debug(f"Target visible: {visible} self.latest_pose: {self.latest_pose}")
         if not visible:
             return
         error_msg = Vector3Stamped()

@@ -60,7 +60,7 @@ def generate_launch_description():
     # Your drone control node
     control_node = Node(
         package='drone_control',
-        executable='drone_control_node',   # change to your real executable name
+        executable='mission_controller_node',   # change to your real executable name
         name='drone_control_node',
         output='screen',
         parameters=[{
@@ -74,6 +74,6 @@ def generate_launch_description():
         tgt_system_arg,
         tgt_component_arg,
         namespace_arg,
-        mavros_node,
+        #mavros_node,
         control_node,
     ])

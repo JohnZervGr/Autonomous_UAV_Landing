@@ -30,7 +30,7 @@ setup(
         'console_scripts': [
             'drone_control_node = drone_control.controller:main',
             'camera_tracker_node = drone_control.camera_tracker:main',
-            'mission_controller_node = drone_control.mission_controller:main',
+            'mission_controller_node = drone_control.mission_fsm:main',
             'debug_plotter_node = drone_control.plotter:main',
         ],
     },
