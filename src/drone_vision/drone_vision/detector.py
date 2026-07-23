@@ -58,11 +58,11 @@ class ArucoDetector(Node):
         # -------------------------
         # Publishers
         # -------------------------
-        self.detected_pub = self.create_publisher(
+        '''self.detected_pub = self.create_publisher(
             Bool,
             '/aruco/detected',
             10
-        )
+        )'''
 
         self.pose_pub = self.create_publisher(
             PoseStamped,
@@ -153,7 +153,7 @@ class ArucoDetector(Node):
     def image_callback(self, msg: Image):
         """Main image callback: convert image, detect marker, publish result."""
 
-        self.get_logger().info('Received image.')
+        #self.get_logger().info('Received image.')
 
         frame = self.ros_image_to_cv2(msg)
         # marker detection
@@ -162,23 +162,23 @@ class ArucoDetector(Node):
 
         detected, corners, ids = self.detect_target_marker(frame)
 
-        detected_msg = Bool()
+        '''detected_msg = Bool()
         detected_msg.data = detected
-        self.detected_pub.publish(detected_msg)
+        self.detected_pub.publish(detected_msg)'''
 
-        if detected:
-            self.get_logger().info(f'Target marker detected: {self.marker_id}')
-        else:
-            self.get_logger().info('Target marker not detected.')
+        '''if not detected:
+            #self.get_logger().info(f'Target marker detected: {self.marker_id}')
+        #else:
+            self.get_logger().info('Target marker not detected.')'''
 
     
         #pose estimetion        
         if detected and ids is not None:
             self.last_image_stamp = msg.header.stamp
             pose_msg = self.estimate_target_pose(corners, ids)
-            self.get_logger().info(f'Estimated target pose: {pose_msg}')
+            #self.get_logger().info(f'Estimated target pose: {pose_msg}')
             if pose_msg is not None:
-                self.get_logger().info(f'Publishing target pose')
+                #self.get_logger().info(f'Publishing target pose')
                 self.pose_pub.publish(pose_msg)
                 self.publish_tf(pose_msg)
 
@@ -209,15 +209,15 @@ class ArucoDetector(Node):
         pose_msg = PoseStamped()
         pose_msg.header.stamp = self.last_image_stamp
         pose_msg.header.frame_id = 'camera_link'
-
-        pose_msg.pose.position.x = float(tvec[0])
-        pose_msg.pose.position.y = float(tvec[1])
+        #swap x and y to match the coordinate system of the drone
+        # TODO : read the tf from thje urdf to automaticaly normalise this
+        pose_msg.pose.position.x = float(tvec[1])
+        pose_msg.pose.position.y = float(tvec[0])
         pose_msg.pose.position.z = float(tvec[2])
 
         # Temporary orientation placeholder.
         R, _ = cv2.Rodrigues(rvec)
         Q = self.rotation_to_quaternion(R)
-
         pose_msg.pose.orientation.x = float(Q[0])
         pose_msg.pose.orientation.y = float(Q[1])
         pose_msg.pose.orientation.z = float(Q[2])

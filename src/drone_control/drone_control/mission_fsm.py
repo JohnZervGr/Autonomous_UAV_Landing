@@ -4,7 +4,7 @@ from rclpy.node import Node
 #mavros msg imports
 from mavros_msgs.msg import State, ExtendedState
 from mavros_msgs.srv import CommandBool, SetMode
-from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 #ros msg imports
 from std_msgs.msg import Bool
 
@@ -28,14 +28,16 @@ class Mission_Controller(Node):
             FlightState.PREFLIGHT: self.run_preflight,
             FlightState.TAKEOFF: self.run_takeoff,
             FlightState.MISSION: self.run_mission,
-            #FlightState.LANDING: self.run_landing,
+            FlightState.LANDING: self.run_landing,
         }
 
         self.transitions = {
             (FlightState.UNKNOWN, "connection_established"): (FlightState.PREFLIGHT, self.on_preflight_start),
             (FlightState.PREFLIGHT, "ready_for_takeoff"): (FlightState.TAKEOFF, self.on_ready_for_takeoff),
             (FlightState.TAKEOFF, "takeoff_complete"): (FlightState.MISSION, self.on_mission_start),
-            (FlightState.LANDING, "marker_lost"): (FlightState.LANDING, self.on_mission_complete),
+            (FlightState.MISSION, "marker_found"): (FlightState.LANDING, self.on_marker_detected),
+            (FlightState.LANDING, "marker_lost"): (FlightState.LANDING, self.on_marker_lost),
+            (FlightState.LANDING, "controller_lost"): (FlightState.MISSION, self.on_marker_lost),     #on function might change later
         }
         self.fsm_state = FlightState.UNKNOWN
         self.get_logger().info("fsm initialised")
@@ -54,6 +56,11 @@ class Mission_Controller(Node):
         self.declare_parameter('target_y', 0.0)
         self.declare_parameter('target_z', 3.0)
         self.declare_parameter('pos_tolerance', 0.20)
+
+        #mission phase
+        self.last_correction = TwistStamped()
+        self.detection = False
+        self.correction_timer = self.create_timer(1/100,self.correction_fwrd_cb,autostart=False)
         
         self.target_x = self.get_parameter('target_x').value
         self.target_y = self.get_parameter('target_y').value
@@ -73,6 +80,14 @@ class Mission_Controller(Node):
         self.create_subscription(PoseStamped,
                                  '/mavros/local_position/pose',
                                  self.pose_cb,
+                                 10)
+        self.create_subscription(Bool,
+                                 'controller/status',
+                                 self.detection_cb,
+                                 10)
+        self.create_subscription(TwistStamped,
+                                 '/controller/cmd_vel',
+                                 self.read_controller_correction_cb,
                                  10)
         self.get_logger().info("topic subscriptions initialized")
 
@@ -189,6 +204,35 @@ class Mission_Controller(Node):
         self.get_logger().info("arming completed")
         return
     
+    def read_controller_correction_cb(self,msg:TwistStamped):
+        self.last_correction = msg
+
+    def detection_cb(self,msg:Bool):
+        self.detection = msg.data
+        #marker is lost, transition away from landing
+        if self.flight_state == FlightState.MISSION and not self.detection:
+            self.transition("marker_lost")
+        #target is found try and land
+        if self.flight_state == FlightState.TAKEOFF and self.detection:
+            self.transition("marker_found")
+        return
+
+    def correction_fwrd_cb(self):
+        now = self.get_clock().now().to_msg()
+        stale = self.get_clock().now() - self.last_detection > rclpy.duration.Duration(seconds=self.detection_timeou)
+
+        #check if stale
+        if stale:
+            self.get_logger().info("stale request controller issue")
+            self.transition("controller_lost")
+            return
+            
+
+        #publish
+        self.last_correction.header.stamp = self.get_clock().now().to_msg()
+        self.vel_pub.publish(self.correction)
+        return
+    
     '''
     ##########################################################
                     FSM TRANSITION FUNCTIONS
@@ -220,6 +264,14 @@ class Mission_Controller(Node):
     def on_preflight_start(self):
         self.setpoint_counter = 0
         return
+
+    def on_marker_lost(self):
+        self.correction_timer.cancel()
+        return
+
+    def on_marker_detected(self):
+        self.correction_timer.reset()
+        return
    
     '''
     ##########################################################
@@ -230,7 +282,11 @@ class Mission_Controller(Node):
         #publish
         self.state_handlers[self.fsm_state]()
         return
-    
+
+    '''
+    eshtablise connectiopn with FC 
+    begin publish offboard signal (heartbeat)
+    '''
     def run_unknown(self):
         self.publish_velocity_setpoint()
         self.setpoint_counter += 1
@@ -239,6 +295,12 @@ class Mission_Controller(Node):
         if not self.current_state.connected: return
         self.transition("connection_established")
 
+
+    '''
+    ensure connection with flight controller
+    set flight mode to offboard
+    arm drone
+    '''
     def run_preflight(self):
         self.publish_velocity_setpoint()
         self.setpoint_counter+=1
@@ -261,6 +323,10 @@ class Mission_Controller(Node):
         
         self.transition("ready_for_takeoff")
 
+
+    '''
+    takeoff verticaly
+    '''
     def run_takeoff(self):
         self.publish_takeoff_setpoint()
 
@@ -276,8 +342,20 @@ class Mission_Controller(Node):
         if self.takeoff_position_reached_counter >= 5:
             self.transition("takeoff_complete")
 
+
+    '''
+    go to a predecided position where the marker is visible
+    '''
     def run_mission(self):
         self.publish_takeoff_setpoint() #placeholder pid controllers will be called here
+        #self.last_correction.header.stamp = self.get_clock().now().to_msg()
+        #self.vel_pub.publish(self.last_correction)
+    
+    '''
+    follow the controller corrections to land
+    '''
+    def run_landing(self):
+        return
     
     
 

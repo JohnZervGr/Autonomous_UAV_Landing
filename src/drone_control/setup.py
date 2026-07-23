@@ -32,6 +32,7 @@ setup(
             'camera_tracker_node = drone_control.camera_tracker:main',
             'mission_controller_node = drone_control.mission_fsm:main',
             'debug_plotter_node = drone_control.plotter:main',
+            'controller_node = drone_control.PIDController:main',
         ],
     },
 )
