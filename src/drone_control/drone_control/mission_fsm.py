@@ -1,12 +1,15 @@
 #ros imports
 import rclpy
 from rclpy.node import Node
+from rclpy.time import Time
 #mavros msg imports
 from mavros_msgs.msg import State, ExtendedState
 from mavros_msgs.srv import CommandBool, SetMode
 from geometry_msgs.msg import PoseStamped, TwistStamped
 #ros msg imports
 from std_msgs.msg import Bool
+
+from rclpy.qos import qos_profile_sensor_data
 
 from enum import Enum
 
@@ -36,7 +39,7 @@ class Mission_Controller(Node):
             (FlightState.PREFLIGHT, "ready_for_takeoff"): (FlightState.TAKEOFF, self.on_ready_for_takeoff),
             (FlightState.TAKEOFF, "takeoff_complete"): (FlightState.MISSION, self.on_mission_start),
             (FlightState.MISSION, "marker_found"): (FlightState.LANDING, self.on_marker_detected),
-            (FlightState.LANDING, "marker_lost"): (FlightState.LANDING, self.on_marker_lost),
+            (FlightState.LANDING, "marker_lost"): (FlightState.MISSION, self.on_marker_lost),
             (FlightState.LANDING, "controller_lost"): (FlightState.MISSION, self.on_marker_lost),     #on function might change later
         }
         self.fsm_state = FlightState.UNKNOWN
@@ -55,17 +58,23 @@ class Mission_Controller(Node):
         self.declare_parameter('target_x', 0.0)
         self.declare_parameter('target_y', 0.0)
         self.declare_parameter('target_z', 3.0)
-        self.declare_parameter('pos_tolerance', 0.20)
+        self.declare_parameter('pos_tolerance', 1.80)
+
+        self.target_x = self.get_parameter('target_x').value
+        self.target_y = self.get_parameter('target_y').value
+        self.target_z = self.get_parameter('target_z').value
+
+        self.pos_tolerance = self.get_parameter('pos_tolerance').value
+
 
         #mission phase
+
+        #landing phase
         self.last_correction = TwistStamped()
         self.detection = False
         self.correction_timer = self.create_timer(1/100,self.correction_fwrd_cb,autostart=False)
         
-        self.target_x = self.get_parameter('target_x').value
-        self.target_y = self.get_parameter('target_y').value
-        self.target_z = self.get_parameter('target_z').value
-        self.pos_tolerance = self.get_parameter('pos_tolerance').value
+        
 
         #subscribers
         self.create_subscription(State, 
@@ -80,9 +89,9 @@ class Mission_Controller(Node):
         self.create_subscription(PoseStamped,
                                  '/mavros/local_position/pose',
                                  self.pose_cb,
-                                 10)
+                                 qos_profile_sensor_data)
         self.create_subscription(Bool,
-                                 'controller/status',
+                                 '/controller/status',
                                  self.detection_cb,
                                  10)
         self.create_subscription(TwistStamped,
@@ -173,6 +182,10 @@ class Mission_Controller(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         self.vel_pub.publish(msg)
         return
+
+    def correction_fwrd_cb(self):
+        self.vel_pub.publish(self.last_correction)
+        return
     
     '''
     ##########################################################
@@ -180,16 +193,17 @@ class Mission_Controller(Node):
     ##########################################################
     '''
 
-    def state_cb(self, msg):
+    def state_cb(self, msg:State):
         self.current_state = msg
         return
     
-    def extended_state_cb(self , msg):
+    def extended_state_cb(self , msg:ExtendedState):
         self.current_extended_state = msg
         return
     
-    def pose_cb(self, msg):
+    def pose_cb(self, msg:PoseStamped):
         self.current_pos = msg
+        #self.get_logger().info(f"position recieved {self.current_pos}")
         return
     
     def offbrd_cb(self,future):
@@ -209,28 +223,6 @@ class Mission_Controller(Node):
 
     def detection_cb(self,msg:Bool):
         self.detection = msg.data
-        #marker is lost, transition away from landing
-        if self.flight_state == FlightState.MISSION and not self.detection:
-            self.transition("marker_lost")
-        #target is found try and land
-        if self.flight_state == FlightState.TAKEOFF and self.detection:
-            self.transition("marker_found")
-        return
-
-    def correction_fwrd_cb(self):
-        now = self.get_clock().now().to_msg()
-        stale = self.get_clock().now() - self.last_detection > rclpy.duration.Duration(seconds=self.detection_timeou)
-
-        #check if stale
-        if stale:
-            self.get_logger().info("stale request controller issue")
-            self.transition("controller_lost")
-            return
-            
-
-        #publish
-        self.last_correction.header.stamp = self.get_clock().now().to_msg()
-        self.vel_pub.publish(self.correction)
         return
     
     '''
@@ -248,7 +240,7 @@ class Mission_Controller(Node):
             if action:
                 action()
         else:
-            self.get_logger().warn(f"No transition defined for state {self.fsm_state} on event {event}")
+            self.get_logger().warn(f"No transition defined for state {self.fsm_state} from on event {event}")
     
 
     def on_ready_for_takeoff(self):
@@ -338,7 +330,7 @@ class Mission_Controller(Node):
         else:
             self.takeoff_position_reached_counter = 0
             
-        
+        #self.get_logger().info(f"position {abs(self.current_pos.pose.position.z)} reached for {self.takeoff_position_reached_counter} ticks")
         if self.takeoff_position_reached_counter >= 5:
             self.transition("takeoff_complete")
 
@@ -347,14 +339,28 @@ class Mission_Controller(Node):
     go to a predecided position where the marker is visible
     '''
     def run_mission(self):
-        self.publish_takeoff_setpoint() #placeholder pid controllers will be called here
-        #self.last_correction.header.stamp = self.get_clock().now().to_msg()
-        #self.vel_pub.publish(self.last_correction)
+        self.publish_takeoff_setpoint() #placeholder will be set to a random position close to the marker
+        #if marker is detected transition to landing
+        stale = self.get_clock().now() - Time.from_msg(self.last_correction.header.stamp) > rclpy.duration.Duration(seconds=0.1)
+
+        if self.detection and not stale:
+            self.transition("marker_found")
+        return
+
     
     '''
     follow the controller corrections to land
     '''
     def run_landing(self):
+
+        stale = self.get_clock().now() - Time.from_msg(self.last_correction.header.stamp) > rclpy.duration.Duration(seconds=0.1)
+        #marker is lost, transition away from landing
+        if not self.detection:
+            self.transition("marker_lost")
+
+        #look if controller msgs are stale
+        if stale:
+            self.transition("marker_lost")    
         return
     
     

@@ -16,6 +16,9 @@ class PIDController(Node):
         self.last_detection = self.get_clock().now()
         #parametrise this
         self.detection_timeout = 0.5
+        self.detected = False
+        self.det_msg = Bool()
+
         #parametrrise this
         # low pass filter value
         self.alpha = 0.2
@@ -29,19 +32,19 @@ class PIDController(Node):
         self.target = Vector3()
         self.target.x = 0.0
         self.target.y = 0.0
-        self.target.z = 2.0
+        self.target.z = 10.0
 
         #(parametrise these)
         # PID gain values
         self.Ke = Vector3()
-        self.Ke.x = 0.5
-        self.Ke.y=  0.5
-        self.Ke.z = 0.5
+        self.Ke.x = 0.2
+        self.Ke.y=  0.2
+        self.Ke.z = 0.2
 
         self.Kd = Vector3()
-        self.Kd.x = 0.5
-        self.Kd.y=  0.5
-        self.Kd.z = 0.5
+        self.Kd.x = 0.0
+        self.Kd.y=  0.0
+        self.Kd.z = 0.0
 
         self.d_f = Vector3()
         self.d_f.x = 0.0
@@ -105,7 +108,6 @@ class PIDController(Node):
 
         d = Vector3()
         d.x = (e.x - self.error.x) / dt 
-        #filtered_derivative = (alpha * filtered_derivative) + (1 - alpha) * derivative;
         d.y = (e.y - self.error.y) / dt
         d.z = (e.z - self.error.z) / dt
 
@@ -119,15 +121,15 @@ class PIDController(Node):
         self.i.y += e.y * dt
         self.i.z += e.z * dt
 
-        self.correction.twist.linear.x = self.clamp(self.Ke.x * e.x + 
+        self.correction.twist.linear.x = 1*self.clamp(self.Ke.x * e.x + 
                                                     self.Kd.x * self.d_f.x + 
                                                     self.Ki.x * self.i.x
                                                     ,self.limit.x)
-        self.correction.twist.linear.y = self.clamp(self.Ke.y * e.y + 
+        self.correction.twist.linear.y = 1*self.clamp(self.Ke.y * e.y + 
                                                     self.Kd.y * self.d_f.y + 
                                                     self.Ki.y * self.i.y
                                                     ,self.limit.y)
-        self.correction.twist.linear.z = self.clamp(self.Ke.z * e.z + 
+        self.correction.twist.linear.z = 1*self.clamp(self.Ke.z * e.z + 
                                                     self.Kd.z * self.d_f.z + 
                                                     self.Ki.z * self.i.z
                                                     ,self.limit.z)
@@ -144,8 +146,6 @@ class PIDController(Node):
     
     def publish_correction(self):
         #make sure its not a stale detection
-        det_msg = Bool()
-        #cor_msg = TwistStamped()
         stale = self.get_clock().now() - self.last_detection > rclpy.duration.Duration(seconds=self.detection_timeout)
 
         if stale:
@@ -158,14 +158,14 @@ class PIDController(Node):
             self.d_f.y = 0.0 
             self.d_f.z = 0.0
         
-        det_msg.data = not stale
+        self.det_msg.data = not stale
 
         #format messages
         cor_msg = self.correction
         cor_msg.header.stamp = self.get_clock().now().to_msg()
 
         #publish
-        self.detection_status_pub.publish(det_msg)
+        self.detection_status_pub.publish(self.det_msg)
         self.correction_pub.publish(cor_msg)
         return
     
