@@ -1,10 +1,7 @@
-#1  work on the flight fsm so it is presentable ~
-#1.2 make the x/y axis flip on the tracker node instead of the fsm 
-#2 impruve pid gains
-#3 implement filtering for the vision system as needed
-#4 add miss tolerance to the fsm
-#5 add approch controler
-#6 consider separating the pid controlers from main fsm node
-#7 add safety measures to the fsm (e.g. if marker is lost, hover in place and wait for it to be reacquired)
+#2 impruve pid gains V
+#2 decouple imu reading from vision detectio (kallman)
+#3 implement filtering for the vision system as needed 
+#4 keep in mind groud effect posibility in the outer control loop
+#5 add approach controler
 #8 add logging to the fsm for debugging and analysis purposes
 #9 test the system in simulation and make any necessary adjustments to the control logic or parameters

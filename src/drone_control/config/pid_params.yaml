@@ -1,0 +1,23 @@
+pid_controller:
+  ros__parameters:
+
+    detection_timeout: 0.5
+    alpha: 0.2
+    #x: ku:0.25 Tu:2sec
+    #z: ku:0.9 Tu:0.5sec
+    Ke.x: 0.21
+    Ke.y: 0.21
+    Ke.z: 0.54
+
+    Kd.x: 0.0
+    Kd.y: 0.0
+    Kd.z: 0.04
+
+    Ki.x: 0.0
+    Ki.y: 0.00
+    Ki.z: 0.18
+
+
+    limit.x: 3.0
+    limit.y: 3.0
+    limit.z: 1.2

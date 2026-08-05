@@ -14,14 +14,44 @@ class PIDController(Node):
         super().__init__('pid_controller')
 
         self.last_detection = self.get_clock().now()
+
+        self.declare_parameter("timeout",0.5)
+        self.declare_parameter("alpha",0.2)
+        self.declare_parameter
+        
         #parametrise this
-        self.detection_timeout = 0.5
+        self.detection_timeout = self.get_parameter("timeout").value
+        self.alpha = self.get_parameter("alpha").value
+
+        # PID gains
+        self.Ke = Vector3(
+            x=self.declare_parameter("Ke.x", 0.2).value,
+            y=self.declare_parameter("Ke.y", 0.2).value,
+            z=self.declare_parameter("Ke.z", 0.2).value,
+        )
+
+        self.Ki = Vector3(
+            x=self.declare_parameter("Ki.x", 0.0).value,
+            y=self.declare_parameter("Ki.y", 0.0).value,
+            z=self.declare_parameter("Ki.z", 0.0).value,
+        )
+
+        self.Kd = Vector3(
+            x=self.declare_parameter("Kd.x", 0.0).value,
+            y=self.declare_parameter("Kd.y", 0.0).value,
+            z=self.declare_parameter("Kd.z", 0.0).value,
+        )
+
+        self.limit = Vector3(
+            x=self.declare_parameter("limit.x", 3.0).value,
+            y=self.declare_parameter("limit.y", 3.0).value,
+            z=self.declare_parameter("limit.z", 1.2).value,
+        )
+
+        self.get_logger().info(f"controller inisialised with P {self.Ke.x}")
+
         self.detected = False
         self.det_msg = Bool()
-
-        #parametrrise this
-        # low pass filter value
-        self.alpha = 0.2
 
         self.error = Vector3()
         self.error.x = 0.0
@@ -32,41 +62,22 @@ class PIDController(Node):
         self.target = Vector3()
         self.target.x = 0.0
         self.target.y = 0.0
-        self.target.z = 10.0
+        self.target.z = 15.0
 
-        #(parametrise these)
-        # PID gain values
-        self.Ke = Vector3()
-        self.Ke.x = 0.2
-        self.Ke.y=  0.2
-        self.Ke.z = 0.2
-
-        self.Kd = Vector3()
-        self.Kd.x = 0.0
-        self.Kd.y=  0.0
-        self.Kd.z = 0.0
 
         self.d_f = Vector3()
         self.d_f.x = 0.0
         self.d_f.y = 0.0
         self.d_f.z = 0.0
 
-        self.Ki = Vector3()
-        self.Ki.x = 0.0
-        self.Ki.y=  0.0
-        self.Ki.z = 0.0
         # integral part 
         self.i = Vector3()
         self.i.x = 0
         self.i.y = 0
         self.i.z = 0
 
-        #(parametrise these)
-        #clamping limits
-        self.limit = Vector3()
-        self.limit.x = 3.0
-        self.limit.y = 3.0
-        self.limit.z = 1.2
+        self.max_i = Vector3(x=0.5 , y=0.5 , z=0.5)
+
 
         self.correction = TwistStamped()
         self.correction.twist.linear.x = 0.0
@@ -117,20 +128,20 @@ class PIDController(Node):
         self.d_f.z = (self.alpha * self.d_f.z) + (1- self.alpha)*d.z
 
         #calculate intergral part
-        self.i.x += e.x * dt
-        self.i.y += e.y * dt
-        self.i.z += e.z * dt
+        self.i.x += self.clamp(e.x * dt, self.max_i.x)
+        self.i.y += self.clamp(e.y * dt, self.max_i.y)
+        self.i.z += self.clamp(e.z * dt, self.max_i.z)
 
         self.correction.twist.linear.x = 1*self.clamp(self.Ke.x * e.x + 
-                                                    self.Kd.x * self.d_f.x + 
+                                                    -(self.Kd.x) * self.d_f.x + 
                                                     self.Ki.x * self.i.x
                                                     ,self.limit.x)
         self.correction.twist.linear.y = 1*self.clamp(self.Ke.y * e.y + 
-                                                    self.Kd.y * self.d_f.y + 
+                                                    -(self.Kd.y) * self.d_f.y + 
                                                     self.Ki.y * self.i.y
                                                     ,self.limit.y)
         self.correction.twist.linear.z = 1*self.clamp(self.Ke.z * e.z + 
-                                                    self.Kd.z * self.d_f.z + 
+                                                    -(self.Kd.z) * self.d_f.z + 
                                                     self.Ki.z * self.i.z
                                                     ,self.limit.z)
         # calculate pid correction
