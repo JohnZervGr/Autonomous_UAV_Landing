@@ -30,6 +30,7 @@ setup(
             'camera_viewer = drone_vision.camera_vision:main',
             'image_test = drone_vision.aruco_image_test:main',
             'detector = drone_vision.detector:main',
+            'guidance = drone_vision.guidance:main',
         ],
     },
 )

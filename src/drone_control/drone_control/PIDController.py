@@ -48,6 +48,8 @@ class PIDController(Node):
             z=self.declare_parameter("limit.z", 1.2).value,
         )
 
+
+
         self.get_logger().info(f"controller inisialised with P {self.Ke.x}")
 
         self.detected = False
@@ -62,7 +64,7 @@ class PIDController(Node):
         self.target = Vector3()
         self.target.x = 0.0
         self.target.y = 0.0
-        self.target.z = 15.0
+        self.target.z = 0.0
 
 
         self.d_f = Vector3()
@@ -86,7 +88,7 @@ class PIDController(Node):
 
 
         self.create_subscription(PoseStamped,
-                                 "/aruco/pose",
+                                 "/guidance/error",
                                  self.read_pose_cb,
                                  10
                                 )
@@ -112,9 +114,9 @@ class PIDController(Node):
 
         #calculate error part
         e = Vector3()
-        e.x = self.target.x -  msg.pose.position.x
-        e.y = self.target.y -  msg.pose.position.y
-        e.z = self.target.z -  msg.pose.position.z
+        e.x = msg.pose.position.x
+        e.y = -msg.pose.position.y
+        e.z = msg.pose.position.z
         #calculate derivative part
 
         d = Vector3()

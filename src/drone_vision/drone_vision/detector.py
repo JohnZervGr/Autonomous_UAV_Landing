@@ -58,12 +58,6 @@ class ArucoDetector(Node):
         # -------------------------
         # Publishers
         # -------------------------
-        '''self.detected_pub = self.create_publisher(
-            Bool,
-            '/aruco/detected',
-            10
-        )'''
-
         self.pose_pub = self.create_publisher(
             PoseStamped,
             '/aruco/pose',
@@ -161,16 +155,6 @@ class ArucoDetector(Node):
             return
 
         detected, corners, ids = self.detect_target_marker(frame)
-
-        '''detected_msg = Bool()
-        detected_msg.data = detected
-        self.detected_pub.publish(detected_msg)'''
-
-        '''if not detected:
-            #self.get_logger().info(f'Target marker detected: {self.marker_id}')
-        #else:
-            self.get_logger().info('Target marker not detected.')'''
-
     
         #pose estimetion        
         if detected and ids is not None:
@@ -209,8 +193,6 @@ class ArucoDetector(Node):
         pose_msg = PoseStamped()
         pose_msg.header.stamp = self.last_image_stamp
         pose_msg.header.frame_id = 'camera_link'
-        #swap x and y to match the coordinate system of the drone
-        # TODO : read the tf from thje urdf to automaticaly normalise this
         pose_msg.pose.position.x = float(tvec[1])
         pose_msg.pose.position.y = float(tvec[0])
         pose_msg.pose.position.z = float(tvec[2])
@@ -259,6 +241,9 @@ class ArucoDetector(Node):
                 q[2] = 0.25 * s
 
         return q 
+
+    def project_target(self, ):
+        return
     
     def publish_tf(self, pose_msg: PoseStamped):
         """Publish TF transform from camera_frame → marker_frame."""

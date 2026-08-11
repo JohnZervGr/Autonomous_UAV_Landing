@@ -49,10 +49,21 @@ def generate_launch_description():
         }]
     )
 
+    # -------------------------
+    # Guidance node
+    # -------------------------
+    guidance_node = Node(
+        package='drone_vision',
+        executable='guidance',
+        name='guidance_node',
+        output='screen',
+    )
+
     return LaunchDescription([
         image_topic_arg,
         camera_info_topic_arg,
         marker_id_arg,
         dictionary_arg,
         aruco_detector_node,
+        guidance_node
     ])
