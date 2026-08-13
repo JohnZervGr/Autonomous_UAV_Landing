@@ -1,10 +1,14 @@
 #ros imports
+from math import tanh
+
 import rclpy
 from rclpy.node import Node
 
 #ros msg imports
 from std_msgs.msg import Bool
-from geometry_msgs.msg import PoseStamped, Vector3Stamped,Vector3,TwistStamped
+from geometry_msgs.msg import PoseStamped,Vector3,TwistStamped
+
+from std_srvs.srv import SetBool
 
 
 
@@ -49,11 +53,14 @@ class PIDController(Node):
         )
 
 
-
+        self.create_service(SetBool, 'decent', self.decent_cb)
         self.get_logger().info(f"controller inisialised with P {self.Ke.x}")
 
+        self.decent = False
         self.detected = False
         self.det_msg = Bool()
+        self.k_v = 0.5 #vertical velocity gain during decent phase, this will be parametrised later
+        self.k_h = 0.5 #horizontal velocity gain during decent phase, this will be parametrised later
 
         self.error = Vector3()
         self.error.x = 0.0
@@ -61,10 +68,10 @@ class PIDController(Node):
         self.error.z = 0.0
 
         # this will change to be given by another node for approach
-        self.target = Vector3()
-        self.target.x = 0.0
-        self.target.y = 0.0
-        self.target.z = 0.0
+        self.offset = Vector3()
+        self.offset.x = 0.0
+        self.offset.y = 0.0
+        self.offset.z = 4.2
 
 
         self.d_f = Vector3()
@@ -106,6 +113,12 @@ class PIDController(Node):
 
         return
     
+
+    def decent_cb(self,request,response):
+        self.decent = request.data
+        self.get_logger().info(f"decent mode set to {self.decent}")
+        response.success = True
+        return response
     
     def read_pose_cb(self,msg:PoseStamped):
 
@@ -114,9 +127,9 @@ class PIDController(Node):
 
         #calculate error part
         e = Vector3()
-        e.x = msg.pose.position.x
-        e.y = -msg.pose.position.y
-        e.z = msg.pose.position.z
+        e.x = msg.pose.position.x - self.offset.x
+        e.y = -msg.pose.position.y + self.offset.y
+        e.z = msg.pose.position.z - self.offset.z
         #calculate derivative part
 
         d = Vector3()
@@ -134,19 +147,31 @@ class PIDController(Node):
         self.i.y += self.clamp(e.y * dt, self.max_i.y)
         self.i.z += self.clamp(e.z * dt, self.max_i.z)
 
-        self.correction.twist.linear.x = 1*self.clamp(self.Ke.x * e.x + 
-                                                    -(self.Kd.x) * self.d_f.x + 
+        self.correction.twist.linear.x = self.clamp(self.Ke.x * e.x + 
+                                                    (self.Kd.x) * self.d_f.x + 
                                                     self.Ki.x * self.i.x
                                                     ,self.limit.x)
-        self.correction.twist.linear.y = 1*self.clamp(self.Ke.y * e.y + 
-                                                    -(self.Kd.y) * self.d_f.y + 
+        self.correction.twist.linear.y = self.clamp(self.Ke.y * e.y + 
+                                                    (self.Kd.y) * self.d_f.y + 
                                                     self.Ki.y * self.i.y
                                                     ,self.limit.y)
-        self.correction.twist.linear.z = 1*self.clamp(self.Ke.z * e.z + 
-                                                    -(self.Kd.z) * self.d_f.z + 
+        self.correction.twist.linear.z = self.clamp(self.Ke.z * e.z + 
+                                                    (self.Kd.z) * self.d_f.z + 
                                                     self.Ki.z * self.i.z
                                                     ,self.limit.z)
+
+        #when in decent phase,overwrite z correction 
+        #z speed is reduced the closer the drone is to the ground
+        #z speed is reduced the further away the drone is from the center of the marker
+        if self.decent:
+            
+            h_dist = self.error.x**2 + self.error.y**2
+            self.correction.twist.linear.z = (self.limit.z *                            #max allowable speed
+                                              tanh(self.k_v * (self.error.z - 2.2)) *  #vertical clamping
+                                              tanh(self.k_h * (1-h_dist)))                  #horizontal clamping
+            self.get_logger().info(f"decent mode active v speed {self.correction.twist.linear.z} h_dist {h_dist} z error {self.error.z}")
         # calculate pid correction
+
 
         self.error.x = e.x
         self.error.y = e.y

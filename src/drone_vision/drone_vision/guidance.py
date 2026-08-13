@@ -1,17 +1,16 @@
 import rclpy
 from rclpy.node import Node
 
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Quaternion
 import numpy as np
 
 class Guidance(Node):
     def __init__(self):
         super().__init__("guidance_node")
 
-        self.point_roll = np.pi/2 #90 degrees up
-        self.point_pitch = 0.0
-        self.point_yaw = 0.0
-        self.target_point = np.array([0,0,10])
+        self.target_point = np.array([0,0,5])
+        self.alpha = 0.6
 
         self.create_subscription(PoseStamped,
                                 "/aruco/pose", 
@@ -21,6 +20,15 @@ class Guidance(Node):
         self.error_pub = self.create_publisher(PoseStamped,
                                           'guidance/error',
                                           10)
+
+        self.error_msg = PoseStamped()
+        self.error_msg.header.stamp = self.get_clock().now().to_msg()
+        self.error_msg.pose.position.x = 0.0
+        self.error_msg.pose.position.y = 0.0
+        self.error_msg.pose.position.z = 0.0
+
+        self.error_msg.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0) 
+        self.get_logger().info("Guidance node initialized")
 
 
     def rotate_vector(self,v: np.ndarray , q: Quaternion) -> np.ndarray:
@@ -50,15 +58,15 @@ class Guidance(Node):
         error = self.target_point + t_rotated
 
         #self.get_logger().info(f"error: {error}")
-        error_msg = PoseStamped()
-        error_msg.header.stamp = self.get_clock().now().to_msg()
-        error_msg.pose.position.x = error[1]
-        error_msg.pose.position.y = error[0]
-        error_msg.pose.position.z = error[2]
+        #(self.alpha * self.d_f.x) + (1- self.alpha)*d.x
+        self.error_msg.header.stamp = self.get_clock().now().to_msg()
+        self.error_msg.pose.position.x = (self.alpha * self.error_msg.pose.position.y) + (1 - self.alpha) * error[1]
+        self.error_msg.pose.position.y = (self.alpha * self.error_msg.pose.position.x) + (1 - self.alpha) * error[0]
+        self.error_msg.pose.position.z = (self.alpha * self.error_msg.pose.position.z) + (1 - self.alpha) * error[2]
 
-        error_msg.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0) #placeholder
+        self.error_msg.pose.orientation = q_inverse #placeholder
 
-        self.error_pub.publish(error_msg)
+        self.error_pub.publish(self.error_msg)
 
         return
 

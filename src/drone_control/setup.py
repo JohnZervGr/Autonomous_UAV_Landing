@@ -36,6 +36,7 @@ setup(
             'mission_controller_node = drone_control.mission_fsm:main',
             'debug_plotter_node = drone_control.plotter:main',
             'controller_node = drone_control.PIDController:main',
+            'proprtional_nav_node = drone_control.proportional_nav:main',
         ],
     },
 )

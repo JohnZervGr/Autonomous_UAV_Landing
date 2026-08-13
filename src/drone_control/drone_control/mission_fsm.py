@@ -20,6 +20,7 @@ class FlightState(Enum):
     TAKEOFF = "takeoff"
     MISSION = "mission"
     LANDING = "landing"
+    TOUCHDOWN = "touchdown"
 
 class Mission_Controller(Node):
     def __init__(self):
@@ -32,6 +33,7 @@ class Mission_Controller(Node):
             FlightState.TAKEOFF: self.run_takeoff,
             FlightState.MISSION: self.run_mission,
             FlightState.LANDING: self.run_landing,
+            FlightState.TOUCHDOWN: self.run_touchdown
         }
 
         self.transitions = {
@@ -41,6 +43,8 @@ class Mission_Controller(Node):
             (FlightState.MISSION, "marker_found"): (FlightState.LANDING, self.on_marker_detected),
             (FlightState.LANDING, "marker_lost"): (FlightState.MISSION, self.on_marker_lost),
             (FlightState.LANDING, "controller_lost"): (FlightState.MISSION, self.on_marker_lost),     #on function might change later
+            (FlightState.LANDING, "groud_contect"):(FlightState.TOUCHDOWN, self.on_landing_complete), 
+            (FlightState.TOUCHDOWN, "restart_mission"):(FlightState.PREFLIGHT)                        #usless for now
         }
         self.fsm_state = FlightState.UNKNOWN
         self.get_logger().info("fsm initialised")
@@ -264,6 +268,11 @@ class Mission_Controller(Node):
     def on_marker_detected(self):
         self.correction_timer.reset()
         return
+
+    def on_landing_complete(self):
+        self.correction_timer.cancel()
+        self.get_logger().info("landing complete")
+        return
    
     '''
     ##########################################################
@@ -347,6 +356,12 @@ class Mission_Controller(Node):
             self.transition("marker_found")
         return
 
+
+    def run_allign(self):
+        #allign or intercept marker at a safe altitude and then transition to landing
+
+        return
+
     
     '''
     follow the controller corrections to land
@@ -361,6 +376,17 @@ class Mission_Controller(Node):
         #look if controller msgs are stale
         if stale:
             self.transition("marker_lost")    
+
+        #detect ground touchdown and transition to touchdown state
+        if self.current_extended_state.landed_state == ExtendedState.LANDED_STATE_ON_GROUND:
+            self.transition("landing_complete")
+
+        return
+
+    def run_touchdown(self):
+        #wait for user input to restart the mission
+        
+
         return
     
     

@@ -6,18 +6,18 @@ pid_controller:
     #x: ku:0.8 Tu:2sec
     #z: ku:0.9 Tu:0.5sec
     Ke.x: 0.5
-    Ke.y: 0.25
-    Ke.z: 0.54
+    Ke.y: 0.5
+    Ke.z: 0.5
 
-    Kd.x: 0.0
-    Kd.y: 0.0
-    Kd.z: 0.04
+    Kd.x: 0.08
+    Kd.y: 0.08
+    Kd.z: 0.34
 
     Ki.x: 0.0
-    Ki.y: 0.00
-    Ki.z: 0.18
+    Ki.y: 0.0
+    Ki.z: 0.0
 
 
     limit.x: 3.0
     limit.y: 3.0
-    limit.z: 1.2
+    limit.z: 0.8
