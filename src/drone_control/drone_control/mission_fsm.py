@@ -4,10 +4,11 @@ from rclpy.node import Node
 from rclpy.time import Time
 #mavros msg imports
 from mavros_msgs.msg import State, ExtendedState
-from mavros_msgs.srv import CommandBool, SetMode
+from mavros_msgs.srv import CommandBool, SetMode, CommandTOL
 from geometry_msgs.msg import PoseStamped, TwistStamped
 #ros msg imports
 from std_msgs.msg import Bool
+from std_srvs.srv import SetBool
 
 from rclpy.qos import qos_profile_sensor_data
 
@@ -19,7 +20,8 @@ class FlightState(Enum):
     PREFLIGHT = "preflight"
     TAKEOFF = "takeoff"
     MISSION = "mission"
-    LANDING = "landing"
+    TRACK = "tracking"
+    DESCENT = "descent"
     TOUCHDOWN = "touchdown"
 
 class Mission_Controller(Node):
@@ -32,18 +34,22 @@ class Mission_Controller(Node):
             FlightState.PREFLIGHT: self.run_preflight,
             FlightState.TAKEOFF: self.run_takeoff,
             FlightState.MISSION: self.run_mission,
-            FlightState.LANDING: self.run_landing,
+            FlightState.TRACK: self.run_tracking,
+            FlightState.DESCENT: self.run_descent,
             FlightState.TOUCHDOWN: self.run_touchdown
         }
 
         self.transitions = {
             (FlightState.UNKNOWN, "connection_established"): (FlightState.PREFLIGHT, self.on_preflight_start),
-            (FlightState.PREFLIGHT, "ready_for_takeoff"): (FlightState.TAKEOFF, self.on_ready_for_takeoff),
+            (FlightState.PREFLIGHT, "ready_for_takeoff"): (FlightState.TAKEOFF, self.on__takeoff_start),
             (FlightState.TAKEOFF, "takeoff_complete"): (FlightState.MISSION, self.on_mission_start),
-            (FlightState.MISSION, "marker_found"): (FlightState.LANDING, self.on_marker_detected),
-            (FlightState.LANDING, "marker_lost"): (FlightState.MISSION, self.on_marker_lost),
-            (FlightState.LANDING, "controller_lost"): (FlightState.MISSION, self.on_marker_lost),     #on function might change later
-            (FlightState.LANDING, "groud_contect"):(FlightState.TOUCHDOWN, self.on_landing_complete), 
+            (FlightState.MISSION, "marker_found"): (FlightState.TRACK, self.on_tracking_start),
+            (FlightState.TRACK, "marker_lost"): (FlightState.MISSION, self.on_marker_lost),
+            (FlightState.TRACK, "controller_lost"): (FlightState.MISSION, self.on_marker_lost),     #on function might change later
+            (FlightState.TRACK, "approach_stable"):(FlightState.DESCENT, self.on_descending_start), 
+            (FlightState.DESCENT, "marker_lost"): (FlightState.MISSION, self.on_marker_lost),
+            (FlightState.DESCENT, "controller_lost"): (FlightState.MISSION, self.on_marker_lost),
+            (FlightState.DESCENT, "ready_for_landing"): (FlightState.TOUCHDOWN, self.on_touchdown_start),
             (FlightState.TOUCHDOWN, "restart_mission"):(FlightState.PREFLIGHT)                        #usless for now
         }
         self.fsm_state = FlightState.UNKNOWN
@@ -73,12 +79,21 @@ class Mission_Controller(Node):
 
         #mission phase
 
-        #landing phase
+        #tracking phase
         self.last_correction = TwistStamped()
         self.detection = False
         self.correction_timer = self.create_timer(1/100,self.correction_fwrd_cb,autostart=False)
-        
-        
+        self.pos_error = PoseStamped()
+
+        #descent phase
+        self.descenting = False
+        self.dec_mode_pending = False
+        self.z_offset = 5.0
+
+        #touchdown phase
+        self.land_req_pending = False
+        self.landing = False
+
 
         #subscribers
         self.create_subscription(State, 
@@ -102,6 +117,10 @@ class Mission_Controller(Node):
                                  '/controller/cmd_vel',
                                  self.read_controller_correction_cb,
                                  10)
+        self.create_subscription(PoseStamped,
+                                "/guidance/error",
+                                self.read_error_cb,
+                                10)
         self.get_logger().info("topic subscriptions initialized")
 
         #publisers
@@ -124,7 +143,12 @@ class Mission_Controller(Node):
                                           "/mavros/cmd/arming")
         self.mode_srv = self.create_client(SetMode,
                                            "/mavros/set_mode")
+        self.descent_srv = self.create_client(SetBool,
+                                             "/decent")
+        self.land_srv = self.create_client(CommandTOL,
+                                           "/mavros/cmd/land")
         self.get_logger().info("services initialized")
+        
 
 
         #control loop timer
@@ -163,6 +187,31 @@ class Mission_Controller(Node):
         
         future.add_done_callback(self.offbrd_cb)
         return
+
+    def set_descent(self,data:Bool):
+        #entry checks
+        if self.descenting == data:return
+        if self.dec_mode_pending:return
+        #create request
+        dec_req = SetBool.Request()
+        dec_req.data = data
+        #send req
+        future = self.descent_srv.call_async(dec_req)
+        self.dec_mode_pending = True
+        #set cb
+        future.add_done_callback(self.descent_cb)
+        return
+
+    def set_land(self):
+        if self.land_req_pending:return
+        if self.landing :return
+        self.get_logger().info("landing requested")
+        land_req = CommandTOL.Request()
+        future = self.land_srv.call_async(land_req)
+        self.land_req_pending = True
+        future.add_done_callback(self.land_cb)
+        return
+
     '''
     ##########################################################
                     PUBLISHER FUNCTIONS
@@ -197,6 +246,10 @@ class Mission_Controller(Node):
     ##########################################################
     '''
 
+    def read_error_cb(self, msg:PoseStamped):
+        self.pos_error = msg
+        return
+
     def state_cb(self, msg:State):
         self.current_state = msg
         return
@@ -220,6 +273,18 @@ class Mission_Controller(Node):
         self.arm_pending = False
         if not self.current_state.armed: return
         self.get_logger().info("arming completed")
+        return
+
+    def descent_cb(self,future):
+        self.dec_mode_pending = False
+        if not future.result():return
+        self.descenting = True
+        return
+
+    def land_cb(self,future):
+        self.land_req_pending = False
+        if not future.result():return
+        self.landing = True
         return
     
     def read_controller_correction_cb(self,msg:TwistStamped):
@@ -246,34 +311,12 @@ class Mission_Controller(Node):
         else:
             self.get_logger().warn(f"No transition defined for state {self.fsm_state} from on event {event}")
     
-
-    def on_ready_for_takeoff(self):
-        self.takeoff_position_reached_counter = 0
-        return
-    
-    def on_mission_start(self):
-        return  
-    
-    def on_mission_complete(self):
-        return
-    
-    def on_preflight_start(self):
-        self.setpoint_counter = 0
-        return
-
     def on_marker_lost(self):
         self.correction_timer.cancel()
+        self.descenting = False
+        self.dec_mode_pending = False
         return
 
-    def on_marker_detected(self):
-        self.correction_timer.reset()
-        return
-
-    def on_landing_complete(self):
-        self.correction_timer.cancel()
-        self.get_logger().info("landing complete")
-        return
-   
     '''
     ##########################################################
                     CONTROL FUNCTIONS
@@ -297,6 +340,10 @@ class Mission_Controller(Node):
         self.transition("connection_established")
 
 
+
+    def on_preflight_start(self):
+        self.setpoint_counter = 0
+        return
     '''
     ensure connection with flight controller
     set flight mode to offboard
@@ -325,6 +372,10 @@ class Mission_Controller(Node):
         self.transition("ready_for_takeoff")
 
 
+    def on__takeoff_start(self):
+        self.takeoff_position_reached_counter = 0
+        return
+
     '''
     takeoff verticaly
     '''
@@ -343,33 +394,68 @@ class Mission_Controller(Node):
         if self.takeoff_position_reached_counter >= 5:
             self.transition("takeoff_complete")
 
+    
+    def on_mission_start(self):
+        return
 
     '''
     go to a predecided position where the marker is visible
     '''
     def run_mission(self):
         self.publish_takeoff_setpoint() #placeholder will be set to a random position close to the marker
-        #if marker is detected transition to landing
+        #if marker is detected transition to tracking
         stale = self.get_clock().now() - Time.from_msg(self.last_correction.header.stamp) > rclpy.duration.Duration(seconds=0.1)
 
         if self.detection and not stale:
             self.transition("marker_found")
         return
 
+    def on_tracking_start(self):
+        self.correction_timer.reset()
+        self.descenting = False
+        self.dec_mode_pending = False
+        self.tracking_position_reached_counter = 0
+        return    
+    '''
+    align drone above the marker
+    when the correction remain constant for more that a second go to descent
+    if the marker is lost swap to mission
+    '''
+    def run_tracking(self):
 
-    def run_allign(self):
-        #allign or intercept marker at a safe altitude and then transition to landing
+        stale = self.get_clock().now() - Time.from_msg(self.last_correction.header.stamp) > rclpy.duration.Duration(seconds=0.1)
+        #marker is lost, transition away from tracking
+        if not self.detection:
+            self.transition("marker_lost")
+
+        #look if controller msgs are stale
+        if stale:
+            self.transition("marker_lost") 
+
+
+        #self.check_position_reached()
+        if abs(self.target_x - self.pos_error.pose.position.x) < self.pos_tolerance and \
+           abs(self.target_y - self.pos_error.pose.position.y) < self.pos_tolerance and \
+           abs(self.target_z - self.pos_error.pose.position.z) < self.pos_tolerance:
+                self.tracking_position_reached_counter += 1
+        else:
+            self.tracking_position_reached_counter = 0   
+
+        if self.tracking_position_reached_counter > 5:
+            self.transition("approach_stable")
 
         return
 
-    
-    '''
-    follow the controller corrections to land
-    '''
-    def run_landing(self):
 
+    def on_descending_start(self):
+        self.descenting = False
+        self.dec_mode_pending = False
+        return
+    
+    def run_descent(self):
+        #final approach to marker and transition to towtchdown
         stale = self.get_clock().now() - Time.from_msg(self.last_correction.header.stamp) > rclpy.duration.Duration(seconds=0.1)
-        #marker is lost, transition away from landing
+        #marker is lost, transition away from tracking
         if not self.detection:
             self.transition("marker_lost")
 
@@ -377,16 +463,39 @@ class Mission_Controller(Node):
         if stale:
             self.transition("marker_lost")    
 
-        #detect ground touchdown and transition to touchdown state
-        if self.current_extended_state.landed_state == ExtendedState.LANDED_STATE_ON_GROUND:
-            self.transition("landing_complete")
+        #keep checking for stable
+        #ensure stable apporach
+        self.cor_threshold = 0.3 #will move to init will be parametrised
+
+        x_err = abs(self.pos_error.pose.position.x)
+        y_err = abs(self.pos_error.pose.position.y)
+        z_err = (self.pos_error.pose.position.z)
+        stable = (x_err < self.cor_threshold and y_err < self.cor_threshold)
+
+        #make descent request if needed
+        if stable and not self.descenting:
+            self.set_descent(True)
+
+        if not stable and self.descenting:
+            self.set_descent(False)
+
+        #exit to twichdown checks
+        #when close egnough to the pad transition to towcdown
+        if stable and self.z_offset - z_err < 0.3:
+            self.transition("ready_for_landing")
 
         return
 
-    def run_touchdown(self):
-        #wait for user input to restart the mission
+    def on_touchdown_start(self):
         
+        return
 
+    def run_touchdown(self):
+        #check if relative position is good
+        self.set_land()
+        #request disarm and land
+
+        #wait for user input to restart the mission
         return
     
     

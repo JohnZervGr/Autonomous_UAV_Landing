@@ -1,0 +1,8 @@
+marker:
+  name: aruco_0
+  model: aruco_0_small
+
+  position:
+    x: 0.0
+    y: 0.0
+    z: 0.02

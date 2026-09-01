@@ -5,19 +5,13 @@ from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+import yaml
 import os
 
 
 def generate_launch_description():
 
     drone_sim_path = get_package_share_directory('drone_sim')
-
-    aruco_model_path = os.path.join(
-        drone_sim_path,
-        'models',
-        'aruco_0',
-        'model.sdf'
-    )
 
     # -------------------------
     # Arguments
@@ -28,43 +22,6 @@ def generate_launch_description():
         default_value='default',
         description='Gazebo world name'
     )
-
-    marker_x_arg = DeclareLaunchArgument(
-        'marker_x',
-        default_value='0.0'
-    )
-
-    marker_y_arg = DeclareLaunchArgument(
-        'marker_y',
-        default_value='0.0'
-    )
-
-    marker_z_arg = DeclareLaunchArgument(
-        'marker_z',
-        default_value='0.02'
-    )
-
-    fcu_url_arg = DeclareLaunchArgument(
-        'fcu_url',
-        default_value='udp://:14540@127.0.0.1:14557',
-        description='PX4 SITL FCU URL'
-    )
-
-    gcs_url_arg = DeclareLaunchArgument(
-        'gcs_url',
-        default_value=''
-    )
-
-    tgt_system_arg = DeclareLaunchArgument(
-        'tgt_system',
-        default_value='1'
-    )
-
-    tgt_component_arg = DeclareLaunchArgument(
-        'tgt_component',
-        default_value='1'
-    )
-
 
     # -------------------------
     # Gazebo readiness checks
@@ -107,6 +64,22 @@ def generate_launch_description():
     # Spawn marker
     # -------------------------
 
+    aruco_config_path = os.path.join(
+        drone_sim_path,
+        'config',
+        'marker.yaml'
+    )
+
+    with open(aruco_config_path, 'r') as file:
+        aruco_config = yaml.safe_load(file)['marker']
+
+    aruco_model_path = os.path.join(
+        drone_sim_path,
+        'models',
+        aruco_config['model'],
+        'model.sdf'
+    )
+
     spawn_aruco_marker = ExecuteProcess(
         cmd=[
             'ros2',
@@ -120,11 +93,11 @@ def generate_launch_description():
             '-file',
             aruco_model_path,
             '-x',
-            LaunchConfiguration('marker_x'),
+            str(aruco_config['position']['x']),
             '-y',
-            LaunchConfiguration('marker_y'),
+            str(aruco_config['position']['y']),
             '-z',
-            LaunchConfiguration('marker_z')
+            str(aruco_config['position']['z'])
         ],
         output='screen'
     )
@@ -134,37 +107,25 @@ def generate_launch_description():
     # Gazebo bridges
     # -------------------------
 
-    image_bridge = Node(
+    camera_config_path = os.path.join(
+    drone_sim_path,
+    'config',
+    'bridges.yaml'
+    )
+
+    camera_config_path = os.path.join(
+        drone_sim_path,
+        'config',
+        'bridges.yaml'
+    )
+
+    bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
         name='gz_camera_image_bridge',
-        arguments=[
-            '/world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/image@sensor_msgs/msg/Image@gz.msgs.Image'
-        ],
-        remappings=[
-            (
-                '/world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/image',
-                '/gz_camera/image_raw'
-            )
-        ],
+        parameters=[{'config_file':camera_config_path}],
+        output='screen'
     )
-
-
-    camera_info_bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        name='gz_camera_info_bridge',
-        arguments=[
-            '/world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo'
-        ],
-        remappings=[
-            (
-                '/world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/camera_info',
-                '/gz_camera/camera_info'
-            )
-        ],
-    )
-
 
     # -------------------------
     # MAVROS
@@ -176,14 +137,23 @@ def generate_launch_description():
         'px4.launch'
     )
 
+    mavros_config_path = os.path.join(
+        drone_sim_path,
+        'config',
+        'mavros.yaml'
+    )
+
+    with open(mavros_config_path, 'r') as file:
+        mavros_config = yaml.safe_load(file)['mavros']
+
 
     mavros_node = IncludeLaunchDescription(
         AnyLaunchDescriptionSource(mavros_launch),
         launch_arguments={
-            'fcu_url': LaunchConfiguration('fcu_url'),
-            'gcs_url': LaunchConfiguration('gcs_url'),
-            'tgt_system': LaunchConfiguration('tgt_system'),
-            'tgt_component': LaunchConfiguration('tgt_component'),
+            'fcu_url': mavros_config['fcu_url'],
+            'gcs_url': mavros_config['gcs_url'],
+            'tgt_system': str(mavros_config['target']['system']),
+            'tgt_component': str(mavros_config['target']['component']),
         }.items()
     )
 
@@ -196,20 +166,10 @@ def generate_launch_description():
 
         # arguments
         world_arg,
-        marker_x_arg,
-        marker_y_arg,
-        marker_z_arg,
-
-        fcu_url_arg,
-        gcs_url_arg,
-        tgt_system_arg,
-        tgt_component_arg,
-
 
         # start sequence
         gazebo_world_check,
         gazebo_image_check,
-        gazebo_info_check,
 
         RegisterEventHandler(
             OnProcessExit(
@@ -225,16 +185,7 @@ def generate_launch_description():
             OnProcessExit(
                 target_action=gazebo_image_check,
                 on_exit=[
-                    image_bridge
-                ]
-            )
-        ),
-
-        RegisterEventHandler(
-            OnProcessExit(
-                target_action=gazebo_info_check,
-                on_exit=[
-                    camera_info_bridge
+                    bridge
                 ]
             )
         ),

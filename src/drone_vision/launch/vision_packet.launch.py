@@ -33,6 +33,12 @@ def generate_launch_description():
         description='ArUco dictionary'
     )
 
+    marker_size_arg = DeclareLaunchArgument(
+        'marker_size',
+        default_value='0.1',
+        description='ArUco marker size in meters'
+    )
+
     # -------------------------
     # ArUco detector node
     # -------------------------
@@ -46,6 +52,7 @@ def generate_launch_description():
             'camera_info_topic': LaunchConfiguration('camera_info_topic'),
             'marker_id': LaunchConfiguration('marker_id'),
             'dictionary': LaunchConfiguration('dictionary'),
+            'marker_size': LaunchConfiguration('marker_size'),
         }]
     )
 
@@ -64,6 +71,7 @@ def generate_launch_description():
         camera_info_topic_arg,
         marker_id_arg,
         dictionary_arg,
+        marker_size_arg,
         aruco_detector_node,
         guidance_node
     ])

@@ -166,10 +166,10 @@ class PIDController(Node):
         if self.decent:
             
             h_dist = self.error.x**2 + self.error.y**2
-            self.correction.twist.linear.z = (self.limit.z *                            #max allowable speed
-                                              tanh(self.k_v * (self.error.z - 2.2)) *  #vertical clamping
+            self.correction.twist.linear.z = (self.limit.z *                                #max allowable speed
+                                              tanh(self.k_v * (self.error.z- 0.65)) *       #vertical clamping
                                               tanh(self.k_h * (1-h_dist)))                  #horizontal clamping
-            self.get_logger().info(f"decent mode active v speed {self.correction.twist.linear.z} h_dist {h_dist} z error {self.error.z}")
+            #self.get_logger().info(f"decent mode active v speed {self.correction.twist.linear.z} h_dist {h_dist} z error {self.error.z}")
         # calculate pid correction
 
 
@@ -187,6 +187,8 @@ class PIDController(Node):
         stale = self.get_clock().now() - self.last_detection > rclpy.duration.Duration(seconds=self.detection_timeout)
 
         if stale:
+            #reset decnt mode
+            self.decent = False
             #reset intergral part
             self.i.x = 0.0
             self.i.y = 0.0

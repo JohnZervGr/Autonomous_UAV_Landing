@@ -1,7 +1,4 @@
-#2 impruve pid gains V
-#2 decouple imu reading from vision detectio (kallman)
+#2 decouple imu reading from vision detection - done by taking the aruco pose possible improvement:kallman
 #3 implement filtering for the vision system as needed 
-#4 keep in mind groud effect posibility in the outer control loop
 #5 add approach controler
-#8 add logging to the fsm for debugging and analysis purposes
 #9 test the system in simulation and make any necessary adjustments to the control logic or parameters

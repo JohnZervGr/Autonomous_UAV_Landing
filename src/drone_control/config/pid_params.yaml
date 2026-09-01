@@ -5,8 +5,8 @@ pid_controller:
     alpha: 0.8
     #x: ku:0.8 Tu:2sec
     #z: ku:0.9 Tu:0.5sec
-    Ke.x: 0.5
-    Ke.y: 0.5
+    Ke.x: 0.7
+    Ke.y: 0.7
     Ke.z: 0.5
 
     Kd.x: 0.08
