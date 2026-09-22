@@ -3,6 +3,9 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Quaternion
+
+from landing_interfaces.srv import SetPose
+
 import numpy as np
 
 class Guidance(Node):
@@ -10,6 +13,7 @@ class Guidance(Node):
         super().__init__("guidance_node")
 
         self.target_point = np.array([0,0,5])
+        self.target_orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
         self.alpha = 0.6
 
         self.create_subscription(PoseStamped,
@@ -21,6 +25,10 @@ class Guidance(Node):
                                           'guidance/error',
                                           10)
 
+        self.tgt_srv = self.create_service(SetPose,
+                                           'guidance/set_target',
+                                           self.set_target_callback)
+
         self.error_msg = PoseStamped()
         self.error_msg.header.stamp = self.get_clock().now().to_msg()
         self.error_msg.pose.position.x = 0.0
@@ -30,7 +38,16 @@ class Guidance(Node):
         self.error_msg.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0) 
         self.get_logger().info("Guidance node initialized")
 
+    def set_target_callback(self, request, response):
+        self.target_point = np.array([request.target_pose.position.y,
+                                      request.target_pose.position.x,
+                                      request.target_pose.position.z])
+        self.target_orientation = request.target_pose.orientation
+        self.get_logger().info(f"Target point set to: {self.target_point}")
+        response.success = True
+        return response
 
+    
     def rotate_vector(self,v: np.ndarray , q: Quaternion) -> np.ndarray:
         """
         Rotate a 3D vector v by a unit quaternion q, using the dot-product
@@ -76,9 +93,7 @@ class Guidance(Node):
 
 def main(args=None):
     rclpy.init(args=args)
- 
     node = Guidance()
- 
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

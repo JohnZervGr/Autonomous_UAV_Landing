@@ -1,0 +1,18 @@
+# Request
+
+uint8 MISSION_START=0
+uint8 NEXT_WAYPOINT=1
+
+string message
+uint8 mission_phase
+---
+
+uint8 MISSION_STARTED=0
+uint8 MISSION_COMPLETE=1
+uint8 WAYPOINT=2
+uint8 ERROR=3
+
+
+# Response
+geometry_msgs/Pose waypoint
+uint8 status

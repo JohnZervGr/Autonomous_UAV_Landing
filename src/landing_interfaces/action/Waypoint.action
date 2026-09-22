@@ -1,0 +1,6 @@
+geometry_msgs/Pose target_pose
+---
+bool success
+string message
+---
+float64 distance_remaining

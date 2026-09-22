@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, RegisterEventHandler
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
@@ -16,6 +16,8 @@ def generate_launch_description():
     # -------------------------
     # Arguments
     # -------------------------
+
+    
 
     world_arg = DeclareLaunchArgument(
         'world',
@@ -107,17 +109,14 @@ def generate_launch_description():
     # Gazebo bridges
     # -------------------------
 
-    camera_config_path = os.path.join(
-    drone_sim_path,
-    'config',
-    'bridges.yaml'
-    )
+    world = LaunchConfiguration('world')
 
-    camera_config_path = os.path.join(
+    camera_config_path = PathJoinSubstitution([
         drone_sim_path,
         'config',
-        'bridges.yaml'
-    )
+        ['bridges_', world, '.yaml']
+    ])
+
 
     bridge = Node(
         package='ros_gz_bridge',

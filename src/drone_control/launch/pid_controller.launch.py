@@ -22,7 +22,9 @@ def generate_launch_description():
         executable="controller_node",
         name="pid_controller",
         output="screen",
-        parameters=[pid_param_file],
+        parameters=[pid_param_file,
+                    {"DEBUG": False},
+                    ],
     )
 
     return LaunchDescription([

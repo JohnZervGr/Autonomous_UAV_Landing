@@ -1,6 +1,7 @@
 #ros imports
 from math import tanh
 
+from landing_interfaces.msg._controller_dbg import ControllerDbg
 import rclpy
 from rclpy.node import Node
 
@@ -8,14 +9,19 @@ from rclpy.node import Node
 from std_msgs.msg import Bool
 from geometry_msgs.msg import PoseStamped,Vector3,TwistStamped
 
-from std_srvs.srv import SetBool
 
+from std_srvs.srv import SetBool
 
 
 
 class PIDController(Node):
     def __init__(self):
         super().__init__('pid_controller')
+
+        self.DEBUG = self.declare_parameter("DEBUG",False).value
+
+        self.get_logger().info("initialising PID controller node")
+
 
         self.last_detection = self.get_clock().now()
 
@@ -53,10 +59,12 @@ class PIDController(Node):
         )
 
 
+
+
         self.create_service(SetBool, 'decent', self.decent_cb)
         self.get_logger().info(f"controller inisialised with P {self.Ke.x}")
 
-        self.decent = False
+        self.desent = False
         self.detected = False
         self.det_msg = Bool()
         self.k_v = 0.5 #vertical velocity gain during decent phase, this will be parametrised later
@@ -71,7 +79,7 @@ class PIDController(Node):
         self.offset = Vector3()
         self.offset.x = 0.0
         self.offset.y = 0.0
-        self.offset.z = 4.2
+        self.offset.z = 0.0
 
 
         self.d_f = Vector3()
@@ -107,9 +115,15 @@ class PIDController(Node):
         self.detection_status_pub = self.create_publisher(Bool,
                                                           'controller/status',
                                                           10)
+
+        if self.DEBUG:
+            self.debug_pub = self.create_publisher(ControllerDbg,
+                                                   'debug/controller_values',
+                                                   10)
+
                 
         self.create_timer(0.01,self.publish_correction) #set the publication timer to 100hz (max)
-        self.get_logger().info("Node initialised")
+        self.get_logger().info("PID controller node initialised")
 
         return
     
@@ -207,6 +221,23 @@ class PIDController(Node):
         #publish
         self.detection_status_pub.publish(self.det_msg)
         self.correction_pub.publish(cor_msg)
+
+        if self.DEBUG:
+            dbg_msg = ControllerDbg()
+            dbg_msg.header.stamp = self.get_clock().now().to_msg()
+            dbg_msg.x.p = float(self.error.x)
+            dbg_msg.x.i = float(self.i.x)
+            dbg_msg.x.d = float(self.d_f.x)
+            dbg_msg.x.out = float(self.correction.twist.linear.x)
+            dbg_msg.y.p = float(self.error.y)
+            dbg_msg.y.i = float(self.i.y)
+            dbg_msg.y.d = float(self.d_f.y)
+            dbg_msg.y.out = float(self.correction.twist.linear.y)
+            dbg_msg.z.p = float(self.error.z)
+            dbg_msg.z.i = float(self.i.z)
+            dbg_msg.z.d = float(self.d_f.z)
+            dbg_msg.z.out = self.correction.twist.linear.z
+            self.debug_pub.publish(dbg_msg)
         return
     
 

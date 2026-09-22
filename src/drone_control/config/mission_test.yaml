@@ -1,0 +1,26 @@
+mission:
+  name: mission_test
+
+  min_altitude: 2.0
+  max_altitude: 20.0
+
+
+waypoints:
+  - position:
+      x: 10.0
+      y: 5.0
+      z: 3.0
+    yaw: 0.0
+
+  - position:
+      x: 20.0
+      y: 5.0
+      z: 3.0
+    yaw: 1.57
+
+  - position:
+      x: 20.0
+      y: 10.0
+      z: 3.0
+    yaw: 3.14
+    
