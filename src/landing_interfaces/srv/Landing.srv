@@ -1,0 +1,10 @@
+# Request
+uint8 SPAWN_MARKER=0
+uint8 REQUEST_COORDINATES=1
+
+uint8 request
+---
+
+# Response
+geometry_msgs/Point position
+uint8 marker_id 

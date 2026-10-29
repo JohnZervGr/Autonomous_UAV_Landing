@@ -1,0 +1,5 @@
+- service_name: "/world/default/create"
+  ros_type_name: "ros_gz_interfaces/srv/SpawnEntity"
+  gz_req_type_name: "gz.msgs.EntityFactory"
+  gz_rep_type_name: "gz.msgs.Boolean"
+  direction: "BIDIRECTIONAL"

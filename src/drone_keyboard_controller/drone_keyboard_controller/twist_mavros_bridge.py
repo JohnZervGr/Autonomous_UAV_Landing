@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-
-import rclpy
-from rclpy.node import Node
-
 from geometry_msgs.msg import Twist, TwistStamped
+
 from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode
+
+import rclpy
+
+from rclpy.node import Node
 
 
 class KeyboardOffboardController(Node):
@@ -79,7 +80,10 @@ class KeyboardOffboardController(Node):
             self.mode_request_in_progress = True
             return
 
-        if self.current_state.mode == 'OFFBOARD' and not self.current_state.armed and not self.arm_request_in_progress:
+        if (self.current_state.mode == 'OFFBOARD'
+                and not self.current_state.armed
+                and not self.arm_request_in_progress):
+
             req = CommandBool.Request()
             req.value = True
             future = self.arming_client.call_async(req)

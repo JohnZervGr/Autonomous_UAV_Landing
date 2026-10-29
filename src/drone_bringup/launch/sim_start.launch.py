@@ -22,7 +22,7 @@ def generate_launch_description():
             os.path.join(
                 drone_sim_path,
                 'launch',
-                'sim_start.launch.py'
+                'sim.launch.py'
             )
         )
     )
@@ -35,7 +35,7 @@ def generate_launch_description():
             os.path.join(
                 drone_vision_path,
                 'launch',
-                'camera_packet.launch.py'
+                'vision_packet.launch.py'
             )
         )
     )
@@ -53,8 +53,22 @@ def generate_launch_description():
         )
     )
 
+    # -------------------------
+    # Control (MAVROS + FSM + controller)
+    # -------------------------
+    pid_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                drone_control_path,
+                'launch',
+                'pid_controller.launch.py'
+            )
+        )
+    )
+
     return LaunchDescription([
         sim_launch,
         vision_launch,
         control_launch,
+        pid_launch
     ])

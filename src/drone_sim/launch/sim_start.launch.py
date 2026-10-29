@@ -17,7 +17,6 @@ def generate_launch_description():
     # Arguments
     # -------------------------
 
-    
 
     world_arg = DeclareLaunchArgument(
         'world',
@@ -126,6 +125,20 @@ def generate_launch_description():
         output='screen'
     )
 
+    marker_node = Node(
+        package='drone_sim',
+        executable='marker_spawner',
+        name='marker_node',
+        parameters=[
+            {'x':aruco_config['position']['x']},
+            {'y':aruco_config['position']['y']},
+            {'z':aruco_config['position']['z']},
+        ],
+        output='screen'
+    )
+
+
+
     # -------------------------
     # MAVROS
     # -------------------------
@@ -156,6 +169,14 @@ def generate_launch_description():
         }.items()
     )
 
+    mission_node = Node(
+        package='drone_control',
+        executable='mission_node',
+        name='mission_node',
+        output='screen'
+    )
+
+
 
     # -------------------------
     # Launch sequence
@@ -174,8 +195,10 @@ def generate_launch_description():
             OnProcessExit(
                 target_action=gazebo_world_check,
                 on_exit=[
-                    spawn_aruco_marker,
-                    mavros_node
+                    spawn_aruco_marker, #
+                    mavros_node, #
+                    marker_node, #
+                    mission_node #
                 ]
             )
         ),
@@ -184,7 +207,7 @@ def generate_launch_description():
             OnProcessExit(
                 target_action=gazebo_image_check,
                 on_exit=[
-                    bridge
+                    bridge #
                 ]
             )
         ),

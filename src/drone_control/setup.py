@@ -17,6 +17,8 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         # Include all config files.
         (os.path.join('share', package_name, 'config'), glob('config/*')),
+        # include test files
+        (os.path.join('share', package_name, 'test'), glob('test/test_kallman.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -38,6 +40,7 @@ setup(
             'controller_node = drone_control.PIDController:main',
             'proprtional_nav_node = drone_control.proportional_nav:main',
             'mission_node = drone_control.mission_node:main',
+            'kallman_node = drone_control.kallman:main',
         ],
     },
 )

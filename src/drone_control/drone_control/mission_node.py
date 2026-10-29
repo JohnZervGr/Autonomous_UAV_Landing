@@ -49,7 +49,7 @@ class MissionNode(Node):
         self.mission_ready = True
 
 
-    def mission_handler_cb(self,req:WaypointRequest.Request,res:WaypointRequest.Response):
+    def mission_handler_cb(self, req:WaypointRequest.Request, res:WaypointRequest.Response):
 
         if not self.mission_ready:
             res.status = WaypointRequest.Response.ERROR

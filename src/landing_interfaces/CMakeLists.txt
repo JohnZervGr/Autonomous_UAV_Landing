@@ -17,10 +17,10 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SetPose.srv"
   "srv/WaypointRequest.srv"
+  "srv/Landing.srv"
   "msg/Pid.msg"
   "msg/ControllerDbg.msg"
   "action/Waypoint.action"
-  
   DEPENDENCIES geometry_msgs std_msgs
 )
 

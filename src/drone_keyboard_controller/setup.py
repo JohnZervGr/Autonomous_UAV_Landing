@@ -1,6 +1,8 @@
-from setuptools import find_packages, setup
-import os
 from glob import glob
+
+import os
+
+from setuptools import find_packages, setup
 
 package_name = 'drone_keyboard_controller'
 
@@ -14,7 +16,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
     ],
-    install_requires=['setuptools','keyboard'],
+    install_requires=['setuptools', 'keyboard'],
     zip_safe=True,
     maintainer='zerv',
     maintainer_email='zervas1999@gmail.com',

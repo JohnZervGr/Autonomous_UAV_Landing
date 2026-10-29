@@ -12,7 +12,7 @@ class Guidance(Node):
     def __init__(self):
         super().__init__("guidance_node")
 
-        self.target_point = np.array([0,0,5])
+        self.target_point = np.array([0,0,0])
         self.target_orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
         self.alpha = 0.6
 
@@ -86,10 +86,6 @@ class Guidance(Node):
         self.error_pub.publish(self.error_msg)
 
         return
-
-
-
-
 
 def main(args=None):
     rclpy.init(args=args)

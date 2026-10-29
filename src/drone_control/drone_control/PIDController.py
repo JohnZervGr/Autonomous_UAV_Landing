@@ -1,17 +1,18 @@
-#ros imports
+import math
 from math import tanh
 
 from landing_interfaces.msg._controller_dbg import ControllerDbg
 import rclpy
 from rclpy.node import Node
 
-#ros msg imports
+# ros msg imports
 from std_msgs.msg import Bool
-from geometry_msgs.msg import PoseStamped,Vector3,TwistStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3
+
 
 
 from std_srvs.srv import SetBool
-
+from landing_interfaces.srv import SetPose
 
 
 class PIDController(Node):
@@ -22,14 +23,12 @@ class PIDController(Node):
 
         self.get_logger().info("initialising PID controller node")
 
-
         self.last_detection = self.get_clock().now()
 
         self.declare_parameter("timeout",0.5)
         self.declare_parameter("alpha",0.2)
         self.declare_parameter
         
-        #parametrise this
         self.detection_timeout = self.get_parameter("timeout").value
         self.alpha = self.get_parameter("alpha").value
 
@@ -60,8 +59,6 @@ class PIDController(Node):
 
 
 
-
-        self.create_service(SetBool, 'decent', self.decent_cb)
         self.get_logger().info(f"controller inisialised with P {self.Ke.x}")
 
         self.desent = False
@@ -79,8 +76,7 @@ class PIDController(Node):
         self.offset = Vector3()
         self.offset.x = 0.0
         self.offset.y = 0.0
-        self.offset.z = 0.0
-
+        self.offset.z = 1.0
 
         self.d_f = Vector3()
         self.d_f.x = 0.0
@@ -90,17 +86,18 @@ class PIDController(Node):
         # integral part 
         self.i = Vector3()
         self.i.x = 0
-        self.i.y = 0
+        self.i.y = 0        # calculate pid correction
+
         self.i.z = 0
 
         self.max_i = Vector3(x=0.5 , y=0.5 , z=0.5)
-
 
         self.correction = TwistStamped()
         self.correction.twist.linear.x = 0.0
         self.correction.twist.linear.y = 0.0
         self.correction.twist.linear.z = 0.0
 
+        self.create_service(SetPose, '/controller/set_offset', self.set_offset_cb)
 
         self.create_subscription(PoseStamped,
                                  "/guidance/error",
@@ -116,6 +113,8 @@ class PIDController(Node):
                                                           'controller/status',
                                                           10)
 
+        
+
         if self.DEBUG:
             self.debug_pub = self.create_publisher(ControllerDbg,
                                                    'debug/controller_values',
@@ -126,24 +125,32 @@ class PIDController(Node):
         self.get_logger().info("PID controller node initialised")
 
         return
-    
 
-    def decent_cb(self,request,response):
-        self.decent = request.data
-        self.get_logger().info(f"decent mode set to {self.decent}")
+
+    def set_offset_cb(self,request,response):
+        self.offset = request.target_pose.position
+        self.get_logger().info(f"offset set to {self.offset}")
         response.success = True
         return response
+
     
     def read_pose_cb(self,msg:PoseStamped):
 
         now = self.get_clock().now()
         dt = max((now - self.last_detection).nanoseconds * 1e-9, 1e-6)
 
+        #filter the allowable offset based on the h_dist fo the error
+        h_dist = msg.pose.position.x**2 + msg.pose.position.y**2
+
+
         #calculate error part
         e = Vector3()
         e.x = msg.pose.position.x - self.offset.x
         e.y = -msg.pose.position.y + self.offset.y
-        e.z = msg.pose.position.z - self.offset.z
+        e.z = msg.pose.position.z + max(self.offset.z , math.e**(-.01/h_dist)) #limit the vertical space
+        #cont:
+        if (math.e**(-.01/h_dist) > self.offset.z):
+            self.get_logger().warn(f"offset.z is too low for the current h_dist {h_dist} and will be limited to {math.e**(-.01/h_dist)}")
         #calculate derivative part
 
         d = Vector3()
@@ -174,19 +181,15 @@ class PIDController(Node):
                                                     self.Ki.z * self.i.z
                                                     ,self.limit.z)
 
-        #when in decent phase,overwrite z correction 
-        #z speed is reduced the closer the drone is to the ground
-        #z speed is reduced the further away the drone is from the center of the marker
-        if self.decent:
-            
-            h_dist = self.error.x**2 + self.error.y**2
-            self.correction.twist.linear.z = (self.limit.z *                                #max allowable speed
-                                              tanh(self.k_v * (self.error.z- 0.65)) *       #vertical clamping
-                                              tanh(self.k_h * (1-h_dist)))                  #horizontal clamping
-            #self.get_logger().info(f"decent mode active v speed {self.correction.twist.linear.z} h_dist {h_dist} z error {self.error.z}")
+        # when in decent phase,overwrite z correction 
+        # z speed is reduced the closer the drone is to the ground
+        # z speed is reduced the further away the drone is from the center of the marker
+        # limit vetical speed downwards to prevent colision with the ground    
+        h_dist = self.error.x**2 + self.error.y**2
+        self.correction.twist.linear.z = max(self.correction.twist.linear.z,self.limit.z *  # max allowable speed
+                                            tanh(self.k_v * (self.error.z- 0.65)) *         # vertical clamping
+                                            tanh(self.k_h * (1-h_dist)))                    # horizontal clamping
         # calculate pid correction
-
-
         self.error.x = e.x
         self.error.y = e.y
         self.error.z = e.z
@@ -201,8 +204,6 @@ class PIDController(Node):
         stale = self.get_clock().now() - self.last_detection > rclpy.duration.Duration(seconds=self.detection_timeout)
 
         if stale:
-            #reset decnt mode
-            self.decent = False
             #reset intergral part
             self.i.x = 0.0
             self.i.y = 0.0
