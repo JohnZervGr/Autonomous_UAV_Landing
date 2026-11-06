@@ -20,6 +20,13 @@ install(
     drone_sim/marker_spawner.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME marker_spawner
+)
+
+install(
+  PROGRAMS
+    drone_sim/mission_node.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME mission_node
 
 )
 

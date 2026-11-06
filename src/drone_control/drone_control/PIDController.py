@@ -137,7 +137,7 @@ class PIDController(Node):
     def read_pose_cb(self,msg:PoseStamped):
 
         now = self.get_clock().now()
-        dt = max((now - self.last_detection).nanoseconds * 1e-9, 1e-6)
+        dt = max((now - self.last_detection).nanoseconds * 1e-9, 1e-6)  # to prevent division by zero
 
         #filter the allowable offset based on the h_dist fo the error
         h_dist = msg.pose.position.x**2 + msg.pose.position.y**2
@@ -149,8 +149,7 @@ class PIDController(Node):
         e.y = -msg.pose.position.y + self.offset.y
         e.z = msg.pose.position.z + max(self.offset.z , math.e**(-.01/h_dist)) #limit the vertical space
         #cont:
-        if (math.e**(-.01/h_dist) > self.offset.z):
-            self.get_logger().warn(f"offset.z is too low for the current h_dist {h_dist} and will be limited to {math.e**(-.01/h_dist)}")
+        
         #calculate derivative part
 
         d = Vector3()

@@ -1,16 +1,40 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, RegisterEventHandler
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
-import yaml
 import os
 
 
 def generate_launch_description():
 
+    mission_arg = DeclareLaunchArgument(
+        'mission_file',
+        default_value='src/drone_sim/config/mission_empty.yaml',
+        description='Path to the mission YAML file'
+    )
+
+    marker_id_arg = DeclareLaunchArgument(
+        'marker_id',
+        default_value='0'
+    )
+
+    marker_x_arg = DeclareLaunchArgument(
+        'marker_x',
+        default_value='0.0'
+    )
+
+    marker_y_arg = DeclareLaunchArgument(
+        'marker_y',
+        default_value='0.0'
+    )
+
+    marker_z_arg = DeclareLaunchArgument(
+        'marker_z',
+        default_value='0.02'
+    )
 
     gazebo_world_check = ExecuteProcess(
         cmd=[
@@ -22,7 +46,6 @@ def generate_launch_description():
         output='screen'
     )
 
-
     gazebo_image_check = ExecuteProcess(
         cmd=[
             'bash',
@@ -33,14 +56,14 @@ def generate_launch_description():
         output='screen'
     )
 
-    mission_launch = IncludeLaunchDescription(
-        AnyLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('drone_sim'),
-                'launch',
-                'mission_nodes.launch.py'
-            )
-        )
+    mission_launch = Node(
+        package='drone_sim',
+        executable='mission_node',
+        name='mission_node',
+        output='screen',
+        parameters=[
+            {'mission_file': LaunchConfiguration('mission_file')}
+        ]
     )
 
     mavros_launch = IncludeLaunchDescription(
@@ -53,11 +76,40 @@ def generate_launch_description():
         )
     )
 
+    bridge_launch = IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('drone_sim'),
+                'launch',
+                'bridge_setup.launch.py'
+            )
+        )
+    )
+
+    marker_spawn_launch = IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('drone_sim'),
+                'launch',
+                'spawn_marker.launch.py'
+            )
+        ),
+        launch_arguments={
+            'marker_id': LaunchConfiguration('marker_id'),
+            'marker_x': LaunchConfiguration('marker_x'),
+            'marker_y': LaunchConfiguration('marker_y'),
+            'marker_z': LaunchConfiguration('marker_z'),
+        }.items()
+    )
 
     return LaunchDescription([
 
         # arguments
-        #world_arg,
+        marker_id_arg,
+        marker_x_arg,
+        marker_y_arg,
+        marker_z_arg,
+        mission_arg,
 
         # start sequence
         gazebo_world_check,
@@ -68,10 +120,10 @@ def generate_launch_description():
                 target_action=gazebo_world_check,
                 on_exit=[
                     mission_launch,
-                    mavros_launch
+                    mavros_launch,
+                    bridge_launch,
+                    marker_spawn_launch
                 ]
             )
         ),
-
-
     ])

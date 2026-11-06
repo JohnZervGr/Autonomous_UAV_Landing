@@ -1,8 +1,6 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, RegisterEventHandler
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch.event_handlers import OnProcessExit
-from launch.launch_description_sources import AnyLaunchDescriptionSource
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import yaml
@@ -62,7 +60,6 @@ def generate_launch_description():
         output='screen'
     )
 
-
     mission_node = Node(
         package='drone_control',
         executable='mission_node',
@@ -81,7 +78,6 @@ def generate_launch_description():
         ],
         output='screen'
     )
-
 
     return LaunchDescription([
         world_arg,

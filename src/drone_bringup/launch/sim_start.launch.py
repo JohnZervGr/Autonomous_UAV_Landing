@@ -66,9 +66,20 @@ def generate_launch_description():
         )
     )
 
+    bridge_setup_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                drone_sim_path,
+                'launch',
+                'bridge_setup.launch.py'
+            )
+        )
+    )
+
     return LaunchDescription([
         sim_launch,
         vision_launch,
         control_launch,
+        bridge_setup_launch,
         pid_launch
     ])

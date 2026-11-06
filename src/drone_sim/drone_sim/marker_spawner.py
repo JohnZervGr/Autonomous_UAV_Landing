@@ -45,16 +45,6 @@ class Marker_Spawner(Node):
         responce.position = self.marker_position  #add randomization to the responce
         responce.marker_id = self.marker_id       #for future if spawning muliple markers
         self.get_logger().info(f"request recieved:{req.request}")
-        '''if req.request == Landing.Request.SPAWN_MARKER:
-            self.get_logger().info("spawning marker...")
-            #spawn marker 
-            spawn_Req = SpawnEntity.Request()
-            spawn_Req.entity_factory.name = "landing_marker"
-            spawn_Req.entity_factory.pose.position = self.marker_position
-            spawn_Req.entity_factory.sdf_filename = self.path_to_sdf
-            spawn_Req.entity_factory.allow_renaming = True
-            #self.get_logger().info(f"marker spawn request sent: {spawn_Req}")
-            future = self.spawn_marker.call_async(spawn_Req)'''
         #respond with marker location
         return responce
 

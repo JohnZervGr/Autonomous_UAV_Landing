@@ -1,11 +1,10 @@
-from landing_interfaces.action import Waypoint
+#!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
 import yaml
-from std_srvs.srv import SetBool 
 
 from landing_interfaces.srv import WaypointRequest
-
 
 
 class MissionNode(Node):
@@ -15,7 +14,7 @@ class MissionNode(Node):
         self.mission_ready = False
 
         #find mission file
-        self.declare_parameter("mission_file", "src/drone_control/config/mission_test.yaml")
+        self.declare_parameter("mission_file", "src/drone_sim/config/mission_empty.yaml")
         mission_file = self.get_parameter("mission_file").value
 
         #read mission file
@@ -98,3 +97,6 @@ def main(args=None):
     rclpy.spin(mission_node)
     mission_node.destroy_node()
     rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

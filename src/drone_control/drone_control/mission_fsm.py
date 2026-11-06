@@ -46,20 +46,19 @@ class Mission_Controller(Node):
 
         self.transitions = {
             (FlightState.UNKNOWN, "connection_established"): (FlightState.PREFLIGHT, self.on_preflight_start),
-            (FlightState.PREFLIGHT, "ready_for_takeoff"): (FlightState.TAKEOFF, self.on__takeoff_start),
+            (FlightState.PREFLIGHT, "ready_for_takeoff"): (FlightState.TAKEOFF, self.on_takeoff_start),
+            (FlightState.PREFLIGHT, "timeout"): (FlightState.PREFLIGHT, self.on_preflight_start),
             (FlightState.TAKEOFF, "takeoff_complete"): (FlightState.MISSION, self.on_mission_start),
-            #(FlightState.MISSION, "marker_found"): (FlightState.TRACK, self.on_tracking_start),
             (FlightState.MISSION, "mission_complete"): (FlightState.SEARCH, self.on_search_start),
             (FlightState.SEARCH, "marker_detected"): (FlightState.TRACK, self.on_tracking_start),            
             (FlightState.TRACK, "marker_lost"): (FlightState.SEARCH, self.on_marker_lost),
-            #(FlightState.TRACK, "controller_lost"): (FlightState.MISSION, self.on_marker_lost),     #on function might change later
             (FlightState.TRACK, 'tracking_stable'):(FlightState.TRACK, self.on_tracking_start),      # cet closer
             (FlightState.TRACK, "approach_stable"):(FlightState.DESCENT, self.on_descending_start), 
             (FlightState.TRACK, 'land_ready'):(FlightState.TOUCHDOWN, self.on_touchdown_start),
             (FlightState.DESCENT, "marker_lost"): (FlightState.SEARCH, self.on_marker_lost),
             (FlightState.DESCENT, "controller_lost"): (FlightState.SEARCH, self.on_marker_lost),
             (FlightState.DESCENT, "ready_for_landing"): (FlightState.TOUCHDOWN, self.on_touchdown_start),
-            (FlightState.TOUCHDOWN, "restart_mission"):(FlightState.PREFLIGHT)                        #usless for now
+            (FlightState.TOUCHDOWN, "restart_mission"):(FlightState.UNKNOWN, self.on_mission_start)                        #usless for now
         }
         self.fsm_state = FlightState.UNKNOWN
         self.get_logger().info("fsm initialised")
@@ -70,35 +69,17 @@ class Mission_Controller(Node):
         self.arm_pending = False
         self.mode_pending = False
 
-        self.mission_recieved = False
-
-        self.tekeoff_target_pos = PoseStamped()
-        self.tekeoff_target_pos_recieved = False
-
         #takeoff phase
-        self.takeoff_position_reached_counter = 0
-
         self.current_pos = PoseStamped()
         self.current_extended_state = ExtendedState()
-        self.declare_parameter('target_x', 0.0)
-        self.declare_parameter('target_y', 0.0)
-        self.declare_parameter('target_z', 3.0)
         self.declare_parameter('pos_tolerance', 1.80)
 
-        self.target_x = self.get_parameter('target_x').value
-        self.target_y = self.get_parameter('target_y').value
-        self.target_z = self.get_parameter('target_z').value
-
         self.takeoff_wp = PoseStamped()
-        self.takeoff_wp.pose.position.x = self.get_parameter('target_x').value
-        self.takeoff_wp.pose.position.y = self.get_parameter('target_y').value
-        self.takeoff_wp.pose.position.z = self.get_parameter('target_z').value
+        self.takeoff_altitude = self.declare_parameter('takeoff_altitude', 3.0).value
         
         self.pos_tolerance = self.get_parameter('pos_tolerance').value
 
-
         #mission phase
-        #initialise mission action server
         self.mission_complete = False
         self.mission_wp = PoseStamped()        
 
@@ -113,18 +94,14 @@ class Mission_Controller(Node):
 
         self.du = Point()
         
-
         #descent phase
         self.descenting = False
         self.dec_mode_pending = False
         self.z_offset = 5.0
         self.cor_threshold = 0.3 
 
-
         #touchdown phase
-        self.land_req_pending = False
         self.landing = False
-
 
         #subscribers
         self.create_subscription(State, 
@@ -190,6 +167,7 @@ class Mission_Controller(Node):
         #control loop timer
         self.create_timer(0.1, self.fsm_controller)
         self.correction_timer = self.create_timer(1/100,self.flight_controller)
+        self.timeout_timer = self.create_timer(10.0, self.timeout_callback,autostart=False)
 
         self.get_logger().info("control timer started")
         self.get_logger().info("node initialiation complete")
@@ -199,57 +177,6 @@ class Mission_Controller(Node):
                     SERVICES FUNCTIONS
     ##########################################################
     '''
-
-    def arm_drone(self):
-        if self.current_state.armed: return
-        if self.arm_pending : return
-
-        serv_req = CommandBool.Request()
-        serv_req.value = True
-
-        future = self.arm_srv.call_async(serv_req)
-        self.arm_pending = True
-
-        future.add_done_callback(self.arm_cb)
-        return
-    
-    
-    def set_mode_offboard(self):
-        if self.current_state.mode == "OFFBOARD": return
-        if self.mode_pending:return
-
-        mode_req = SetMode.Request()
-        mode_req.custom_mode = "OFFBOARD"
-        future = self.mode_srv.call_async(mode_req)
-        self.mode_pending = True
-        
-        future.add_done_callback(self.offbrd_cb)
-        return
-
-    def set_descent(self,data:Bool):
-        #entry checks
-        if self.descenting == data:return
-        if self.dec_mode_pending:return
-        #create request
-        dec_req = SetBool.Request()
-        dec_req.data = data
-        #send req
-        future = self.descent_srv.call_async(dec_req)
-        self.dec_mode_pending = True
-        #set cb
-        future.add_done_callback(self.descent_cb)
-        return
-
-    def set_land(self):
-        if self.land_req_pending:return
-        if self.landing :return
-        self.get_logger().info("landing requested")
-        land_req = CommandTOL.Request()
-        future = self.land_srv.call_async(land_req)
-        self.land_req_pending = True
-        future.add_done_callback(self.land_cb)
-        return
-
     def mission_request(self,req:int):
         if self.mission_req_pending: return
         #if self.mission_started: return
@@ -259,12 +186,6 @@ class Mission_Controller(Node):
         future = self.waypoint_srv.call_async(srv)
         self.mission_req_pending = True
         future.add_done_callback(self.mission_cb)
-        return
-
-    def send_landing_request(self):
-        req = Landing.Request()
-        req.request = 0
-        self.la
         return
 
     '''
@@ -314,34 +235,9 @@ class Mission_Controller(Node):
         self.current_pos = msg
         #self.get_logger().info(f"position recieved {self.current_pos}")
         return
-    
-    def offbrd_cb(self,future):
-        self.mode_pending = False
-        if not self.current_state.mode == "OFFBOARD" : return
-        self.get_logger().info("mode set: OFFBOARD")
-        return
-    
-    def arm_cb(self,future):
-        self.arm_pending = False
-        if not self.current_state.armed: return
-        self.get_logger().info("arming completed")
-        return
-
-    def descent_cb(self,future):
-        self.dec_mode_pending = False
-        if not future.result():return
-        self.descenting = True
-        return
-
-    def land_cb(self,future):
-        self.land_req_pending = False
-        if not future.result():return
-        self.landing = True
-        return
    
     def read_controller_correction_cb(self,msg:TwistStamped):
         self.last_correction = msg
-
 
     def detection_cb(self,msg:Bool):
         self.detection = msg.data
@@ -399,9 +295,14 @@ class Mission_Controller(Node):
     def on_marker_lost(self):
         #self.correction_timer.cancel()
         self.tracking_offset.pose.position.z = .5
-        self.descenting = False
-        self.set_descent(False)
         return
+
+    
+    def timeout_callback(self):
+        self.get_logger().warn('Timeout occurred')
+        self.transition('timeout')
+        self.timeout_timer.cancel()
+        # loop though current flight state
 
     '''
     ##########################################################
@@ -445,6 +346,11 @@ class Mission_Controller(Node):
         self.state_handlers[self.fsm_state]()
         return
 
+
+    def on_mission_restart(self):
+        self.setpoint_counter = 0
+        return
+    
     '''
     establish connectiopn with FC 
     begin publish offboard signal (heartbeat)
@@ -456,15 +362,35 @@ class Mission_Controller(Node):
         if self.setpoint_counter <= 20: return
         if not self.current_state.connected: return
         self.transition("connection_established")
+        return
 
 
     def on_preflight_start(self):
         self.setpoint_counter = 0
-        self.mission_req_pending = False
+        # self.mission_req_pending = False
         self.mission_started = False
+
+        if self.current_state.mode != "OFFBOARD":
+            mode_req = SetMode.Request()
+            mode_req.custom_mode = "OFFBOARD"
+            future = self.mode_srv.call_async(mode_req)
+
+        if not self.current_state.armed:
+            serv_req = CommandBool.Request()
+            serv_req.value = True
+            future = self.arm_srv.call_async(serv_req)
+
+        if not self.mission_started:
+            self.get_logger().info(f"sending request: {WaypointRequest.Request.MISSION_START}")
+            srv = WaypointRequest.Request()
+            srv.mission_phase = WaypointRequest.Request.MISSION_START
+            future = self.waypoint_srv.call_async(srv)
+            future.add_done_callback(self.mission_cb)
+
         #set takeoff waypoint to a x meters above the curent position (home)
-        self.tekeoff_wp = self.current_pos
-        self.tekeoff_wp.pose.position.z += 3
+        self.takeoff_wp.pose = self.current_pos.pose
+        self.takeoff_wp.pose.position.z += self.takeoff_altitude
+        self.timeout_timer.reset()
         return
     '''
     ensure connection with flight controller
@@ -480,30 +406,28 @@ class Mission_Controller(Node):
 
         #wait until mission is recieved
         if not self.mission_started:
-            #self.get_logger().info("waiting for mission to be recieved")
-            self.mission_request(WaypointRequest.Request.MISSION_START)
             return
 
         #make offboard request if there is need
         if self.current_state.mode != "OFFBOARD":
-            self.set_mode_offboard()
             return
         
         #arm drone if not already armed
         if not self.current_state.armed:
-            self.arm_drone()
             return
-
        
         #check transition parameters
         if not (self.current_state.connected and self.current_state.armed and self.current_state.mode == "OFFBOARD"): return
-        
+        self.timeout_timer.cancel()
         self.transition("ready_for_takeoff")
+        return
 
 
-    def on__takeoff_start(self):
-        self.takeoff_position_reached_counter = 0
+    def on_takeoff_start(self):
         self.pos_reached_time = None
+        # update takeoff position
+        self.takeoff_wp.pose = self.current_pos.pose
+        self.takeoff_wp.pose.position.z += self.takeoff_altitude
         #probe takoff position (x meters above current pos)
         return
 
@@ -512,39 +436,32 @@ class Mission_Controller(Node):
     '''
     def run_takeoff(self):
 
-        #self.check_position_reached()
         if self.waypoint_reached(self.takeoff_wp.pose, self.current_pos.pose, self.pos_tolerance):
             self.pos_reached_time = self.get_clock().now() if self.pos_reached_time is None else self.pos_reached_time
         else:
             self.pos_reached_time = None
         
-        #self.get_logger().info(f"position {abs(self.current_pos.pose.position.z)} reached for {self.takeoff_position_reached_counter} ticks")
         if (self.pos_reached_time is not None
                 and (self.get_clock().now() - self.pos_reached_time) >= Duration(seconds=5)):
             self.transition("takeoff_complete")
+            return
 
 
     def on_mission_start(self):
-        self.waypoint_req_pending = False
-        #self.waypoint_reached = False
         self.mission_complete = False
         self.mission_wp.pose = self.takeoff_wp.pose
-        self.takeoff_position_reached_counter = 0
         self.pos_reached_time = None
-
         return
 
     '''
     go to a predecided position where the marker is visible
     '''
     def run_mission(self):
-        # check if mission complete
+
         if self.mission_complete:
-            #self.get_logger().info(f"mission complete going to {self.takeoff_wp.pose}")
             self.transition("mission_complete")
             return
         
-        # chech if a new wp is reached
         if self.waypoint_reached(self.mission_wp.pose,self.current_pos.pose, self.pos_tolerance):
             self.pos_reached_time = self.get_clock().now() if self.pos_reached_time is None else self.pos_reached_time
         else:
@@ -557,25 +474,20 @@ class Mission_Controller(Node):
             self.mission_request(WaypointRequest.Request.NEXT_WAYPOINT)
             #self.get_logger().info("Waypoint reached requesting next")
             return
-        
-        #if marker is detected transition to tracking
-        stale = self.get_clock().now() - Time.from_msg(self.last_correction.header.stamp) > rclpy.duration.Duration(seconds=0.1)
-        '''
-        if self.detection and not stale:
-            self.transition("marker_found")
-        '''
         return
 
     def on_search_start(self):
         self.marker_wp_recieved = False
-        self.marker_req_pending = False
+        
         self.marker_wp = PoseStamped()
         self.marker_wp.pose = self.mission_wp.pose    #to prevent kick before callback returns
+        
         marker_req = Landing.Request()
         marker_req.request = Landing.Request.SPAWN_MARKER  #needs to change
         self.get_logger().info("requesting marker coordinates")
         future = self.marker_srv.call_async(marker_req)
         future.add_done_callback(self.marker_coordinates_recieved_cb)
+
         return
 
 
@@ -598,21 +510,21 @@ class Mission_Controller(Node):
             return
 
         if not self.waypoint_reached(self.marker_wp.pose, self.current_pos.pose, self.pos_tolerance):
-            #self.get_logger().info("landing waypoint reached")
             #trigger search
             return
 
         if self.detection:
-            #self.get_logger().info("marker detected, transitioning to tracking")
             self.transition("marker_detected")
             return
-        
+
+        # begin gaining altitude until the marker is detected up to the max altitude the marker size alows
+        # when max altitude is reached begin a search patern based on preticted error
         return
 
     def on_tracking_start(self):
         self.pos_reached_time = None
         self.du_stable = None
-        self.landing_threshold = 0.13
+        self.landing_threshold = 0.12
 
         msg = SetPose.Request()
         msg.target_pose.position = self.tracking_offset.pose.position
@@ -622,7 +534,13 @@ class Mission_Controller(Node):
         self.get_logger().info("tracking started, controller target set to 0,0,1")
         return 
 
-    def set_controller_target_cb(self,future: SetPose.Response):
+    def set_controller_target_cb(self, future):
+        result = future.result()
+        if result.success:
+            self.get_logger().info("controller target set successfully")
+        else:
+            self.get_logger().warn("controller target set failed")
+            self.transition("marker_lost") # transition to failsafe if a problem with the controller occurs
         return
     
 
@@ -664,11 +582,13 @@ class Mission_Controller(Node):
 
         # check stabilyty
         if relative_pos_stable and relative_vel_stable:
-            
+            self.get_logger().info('approach stable decsending')
             # get closer
             self.tracking_offset.pose.position.z *= 1/2
+            self.transition('tracking_stable')
             if self.pos_error.pose.position.z < self.landing_threshold:
                 self.transition('land_ready')
+                return
             # self.transition('tracking_stable')
                         
         return
@@ -718,7 +638,6 @@ class Mission_Controller(Node):
 
     def on_touchdown_start(self):
         self.landing = False
-        self.land_req_pending = False
         # send disarm request
         srv = CommandLong.Request()
         srv.command = 400
@@ -738,10 +657,9 @@ class Mission_Controller(Node):
     '''
     def run_touchdown(self):
         # check if relative position is good
-        self.set_land()
-        # request disarm and land
-        # if self.current_extended_state.landed_state == 1:
-            # self.transition("restart_mission")
+        if self.current_extended_state.landed_state == ExtendedState.LANDED_STATE_ON_GROUND:
+            self.get_logger().info('drone landed, restarting mission')
+            self.transition("restart_mission")
         # wait for user input to restart the mission
         return
 
@@ -759,7 +677,6 @@ class Mission_Controller(Node):
         )
     
     
-
 def main(args=None):
     rclpy.init(args=args)
     mission_controller = Mission_Controller()
