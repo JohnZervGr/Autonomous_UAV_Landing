@@ -17,45 +17,24 @@ import os
 
 def generate_launch_description():
     # Launch args
-    fcu_url_arg = DeclareLaunchArgument(
-        'fcu_url',
-        default_value='udp://:14540@127.0.0.1:14557',
-        description='MAVROS FCU URL for PX4 SITL'
-    )
+    pkg_name = "drone_control"
 
-    gcs_url_arg = DeclareLaunchArgument(
-        'gcs_url',
-        default_value='',
-        description='Optional GCS proxy URL'    
-    )
-
-    tgt_system_arg = DeclareLaunchArgument(
-        'tgt_system',
-        default_value='1',
-        description='Target system id'
-    )
-
-    tgt_component_arg = DeclareLaunchArgument(
-        'tgt_component',
-        default_value='1',
-        description='Target component id'
+    pid_param_file = os.path.join(
+        get_package_share_directory(pkg_name),
+        "config",
+        "pid_params.yaml"
     )
 
     # MAVROS launch
-    mavros_launch = os.path.join(
-        get_package_share_directory('mavros'),
-        'launch',
-        'px4.launch'
-    ) 
 
-    mavros_node = IncludeLaunchDescription(
-        AnyLaunchDescriptionSource(mavros_launch),
-        launch_arguments={
-            'fcu_url': LaunchConfiguration('fcu_url'),
-            'gcs_url': LaunchConfiguration('gcs_url'),
-            'tgt_system': LaunchConfiguration('tgt_system'),
-            'tgt_component': LaunchConfiguration('tgt_component'),
-        }.items()
+    controller_node = Node(
+        package=pkg_name,
+        executable="controller_node",
+        name="pid_controller",
+        output="screen",
+        parameters=[pid_param_file,
+                    {"DEBUG": False},
+                    ],
     )
 
     # mission controller node
@@ -66,18 +45,7 @@ def generate_launch_description():
         output='screen',
     )
 
-    tracker_node = Node(
-        package='drone_control',
-        executable='camera_tracker_node',
-        name='camera_tracker',
-        output='screen', 
-    )
     return LaunchDescription([
-        fcu_url_arg,
-        gcs_url_arg,
-        tgt_system_arg,
-        tgt_component_arg,
-        mavros_node,
+        controller_node,
         mission_controller_node,
-        tracker_node,
     ])
