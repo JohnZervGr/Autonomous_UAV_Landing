@@ -25,8 +25,6 @@ def generate_launch_description():
         "pid_params.yaml"
     )
 
-    # MAVROS launch
-
     controller_node = Node(
         package=pkg_name,
         executable="controller_node",

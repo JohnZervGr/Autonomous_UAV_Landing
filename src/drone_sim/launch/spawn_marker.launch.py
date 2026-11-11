@@ -69,12 +69,13 @@ def spawn_markers(context):
     aruco_model_path = os.path.join(
         drone_sim_path,
         'models',
-        'aruco_0',
+        'aruco_0_small',
         'model.sdf'
     )
 
     # Launch parameters
     marker_id = LaunchConfiguration('marker_id').perform(context)
+    marker_size = LaunchConfiguration('marker_size').perform(context)
     marker_x = LaunchConfiguration('marker_x').perform(context)
     marker_y = LaunchConfiguration('marker_y').perform(context)
     marker_z = LaunchConfiguration('marker_z').perform(context)

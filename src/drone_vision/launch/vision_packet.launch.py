@@ -17,7 +17,7 @@ def generate_launch_description():
 
     camera_info_topic_arg = DeclareLaunchArgument(
         'camera_info_topic',
-        default_value='/gz_camera/camera_info',
+        default_value='/gz_camera/image_info',
         description='Camera info topic'
     )
 
@@ -72,6 +72,7 @@ def generate_launch_description():
         marker_id_arg,
         dictionary_arg,
         marker_size_arg,
+        
         aruco_detector_node,
         guidance_node
     ])

@@ -68,8 +68,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         world_arg,
-        mavros_node,
-        bridge
+        mavros_node
     ])
 
 

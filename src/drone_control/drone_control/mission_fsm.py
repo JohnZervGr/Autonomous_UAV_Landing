@@ -166,7 +166,7 @@ class Mission_Controller(Node):
  
         #control loop timer
         self.create_timer(0.1, self.fsm_controller)
-        self.correction_timer = self.create_timer(1/100,self.flight_controller)
+        self.correction_timer = self.create_timer(1/50,self.flight_controller)
         self.timeout_timer = self.create_timer(10.0, self.timeout_callback,autostart=False)
 
         self.get_logger().info("control timer started")
@@ -299,7 +299,9 @@ class Mission_Controller(Node):
 
     
     def timeout_callback(self):
-        self.get_logger().warn('Timeout occurred')
+        if self.fsm_state == FlightState.PREFLIGHT:
+            self.get_logger().warn('Timeout in PREFLIGHT state, retrying preflight checks')
+            self.get_logger().warn(f'mission_started: {self.mission_started}, connected: {self.current_state.connected}, armed: {self.current_state.armed}, mode: {self.current_state.mode}')
         self.transition('timeout')
         self.timeout_timer.cancel()
         # loop though current flight state
@@ -327,11 +329,12 @@ class Mission_Controller(Node):
             self.pose_pub.publish(self.marker_wp)
             return
         
-        #need an new one for the search
+        # need an new one for the search
         if self.fsm_state == FlightState.TRACK:
             self.vel_pub.publish(self.last_correction)
             return
-        #one for heardbeat???
+        
+        # one for heardbeat???
         heartbeat = TwistStamped()
         heartbeat.header.stamp = now
         heartbeat.twist.linear.x = 0.0
@@ -417,7 +420,7 @@ class Mission_Controller(Node):
             return
        
         #check transition parameters
-        if not (self.current_state.connected and self.current_state.armed and self.current_state.mode == "OFFBOARD"): return
+        # if not (self.current_state.connected and self.current_state.armed and self.current_state.mode == "OFFBOARD"): return
         self.timeout_timer.cancel()
         self.transition("ready_for_takeoff")
         return
@@ -630,10 +633,6 @@ class Mission_Controller(Node):
         if stale:
             self.transition("marker_lost")    
             return
-
-        # get into position
-
-
         return
 
     def on_touchdown_start(self):

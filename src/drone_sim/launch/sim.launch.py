@@ -96,6 +96,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'marker_id': LaunchConfiguration('marker_id'),
+            'marker_size': LaunchConfiguration('marker_size'),
             'marker_x': LaunchConfiguration('marker_x'),
             'marker_y': LaunchConfiguration('marker_y'),
             'marker_z': LaunchConfiguration('marker_z'),

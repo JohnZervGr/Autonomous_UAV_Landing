@@ -1,14 +1,27 @@
 '''
 Launch file for the camera packet node, which detects ArUco markers in the camera feed and publishes their poses.
 '''
-
 from launch import LaunchDescription
-from launch_ros.actions import Node
+from launch_ros.actions import DeclareLaunchArgument, Node
 from ament_index_python.packages import get_package_share_directory
-import os
 
 
 def generate_launch_description():
+
+    marker_id_arg = DeclareLaunchArgument(
+        'marker_id',
+        default_value='0'
+    )
+
+    marker_size_arg = DeclareLaunchArgument(
+        'marker_size',
+        default_value='1.0'
+    )
+
+    dictionary_arg = DeclareLaunchArgument(
+        'dictionary',
+        default_value='DICT_4X4_50'
+    )
 
     aruco_detector_node = Node(
         package='aruco_ros',
@@ -25,10 +38,13 @@ def generate_launch_description():
         }],
         remappings=[
             ('/image', '/gz_camera/image_raw'),
-            ('/camera_info', '/gz_camera/camera_info'),
+            ('/camera_info', '/gz_camera/image_info'),
         ]
     )
 
     return LaunchDescription([
+        marker_id_arg,
+        marker_size_arg,
+        dictionary_arg,
         aruco_detector_node
     ])

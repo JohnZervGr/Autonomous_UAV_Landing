@@ -23,7 +23,7 @@ class ArucoDetector(Node):
         # Parameters
         # -------------------------
         self.declare_parameter('image_topic', '/gz_camera/image_raw')
-        self.declare_parameter('camera_info_topic', '/gz_camera/camera_info')
+        self.declare_parameter('camera_info_topic', '/gz_camera/image_info')
         self.declare_parameter('marker_id', 0)
         self.declare_parameter('dictionary', 'DICT_4X4_50')
         self.declare_parameter('marker_size', 1.0)
@@ -36,9 +36,7 @@ class ArucoDetector(Node):
         self.marker_size = self.get_parameter('marker_size').value
         self.camera_frame = self.get_parameter('camera_frame').value
 
-
         self.tf_broadcaster = TransformBroadcaster(self)
-
 
         # -------------------------
         # OpenCV / ArUco setup
@@ -134,7 +132,6 @@ class ArucoDetector(Node):
             self.aruco_dict,
             parameters=self.aruco_params
         )
-
         if ids is None:
             return False, corners, ids
 
@@ -147,7 +144,7 @@ class ArucoDetector(Node):
     def image_callback(self, msg: Image):
         """Main image callback: convert image, detect marker, publish result."""
 
-        #self.get_logger().info('Received image.')
+        # self.get_logger().info('Received image.')
 
         frame = self.ros_image_to_cv2(msg)
         # marker detection
@@ -155,21 +152,22 @@ class ArucoDetector(Node):
             return
 
         detected, corners, ids = self.detect_target_marker(frame)
+        # self.get_logger().info(f'Marker detected: {detected} corners: {len(corners)} ids: {ids.flatten().tolist() if ids is not None else None}')
     
         #pose estimetion        
         if detected and ids is not None:
             self.last_image_stamp = msg.header.stamp
             pose_msg = self.estimate_target_pose(corners, ids)
-            #self.get_logger().info(f'Estimated target pose: {pose_msg}')
+            # self.get_logger().info(f'Estimated target pose: {pose_msg}')
             if pose_msg is not None:
-                #self.get_logger().info(f'Publishing target pose')
+                # self.get_logger().info(f'Publishing target pose')
                 self.pose_pub.publish(pose_msg)
                 self.publish_tf(pose_msg)
 
-        
 
     def estimate_target_pose(self, corners, ids):
         if not self.camera_info_received:
+            self.get_logger().warn('Camera info not received yet. Cannot estimate pose.')
             return None
 
         ids_list = ids.flatten().tolist()
@@ -204,6 +202,7 @@ class ArucoDetector(Node):
         pose_msg.pose.orientation.y = float(Q[1])
         pose_msg.pose.orientation.z = float(Q[2])
         pose_msg.pose.orientation.w = float(Q[3])
+
 
         return pose_msg
 
