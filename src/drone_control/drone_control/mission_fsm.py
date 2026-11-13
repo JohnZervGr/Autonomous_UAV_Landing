@@ -7,7 +7,6 @@ from mavros_msgs.msg import State, ExtendedState
 from mavros_msgs.srv import CommandBool, SetMode, CommandTOL, CommandLong
 from geometry_msgs.msg import PoseStamped, TwistStamped, Pose, Point
 #ros msg imports
-from std_srvs.srv import SetBool
 from std_msgs.msg import Bool
 
 from landing_interfaces.srv import WaypointRequest, Landing, SetPose
@@ -345,7 +344,6 @@ class Mission_Controller(Node):
 
     
     def fsm_controller(self):
-        #publish
         self.state_handlers[self.fsm_state]()
         return
 

@@ -75,7 +75,7 @@ def spawn_markers(context):
 
     # Launch parameters
     marker_id = LaunchConfiguration('marker_id').perform(context)
-    marker_size = LaunchConfiguration('marker_size').perform(context)
+    #marker_size = LaunchConfiguration('marker_size').perform(context)
     marker_x = LaunchConfiguration('marker_x').perform(context)
     marker_y = LaunchConfiguration('marker_y').perform(context)
     marker_z = LaunchConfiguration('marker_z').perform(context)
@@ -136,35 +136,40 @@ def generate_launch_description():
         output='screen'
     )
 
+    marker_control_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='marker_control_bridge',
+        arguments=[
+            '/model/aruco_marker_0_default/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist'
+        ],
+        output='screen'
+    )
+
 
     return LaunchDescription([
-
         DeclareLaunchArgument(
             'marker_id',
             default_value='0',
             description='ArUco marker ID'
         ),
-
         DeclareLaunchArgument(
             'marker_x',
             default_value='0.0',
             description='Marker X position'
         ),
-
         DeclareLaunchArgument(
             'marker_y',
             default_value='0.0',
             description='Marker Y position'
         ),
-
         DeclareLaunchArgument(
             'marker_z',
             default_value='0.001',
             description='Marker Z position'
         ),
-
         marker_node,
-
+        marker_control_bridge,
         OpaqueFunction(
             function=spawn_markers
         )

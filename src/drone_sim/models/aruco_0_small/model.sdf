@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <sdf version="1.9">
   <model name="aruco_0_small">
-    <static>true</static>
+    <static>false</static>
 
     <link name="link">
 
@@ -35,5 +35,12 @@
       </collision>
 
     </link>
+
+    <plugin filename="gz-sim-velocity-control-system"
+            name="gz::sim::systems::VelocityControl">
+      <initial_linear>0 0 0</initial_linear>   <!-- m/s in x -->
+      <initial_angular>0 0 0</initial_angular>
+    </plugin>
+
   </model>
 </sdf>
